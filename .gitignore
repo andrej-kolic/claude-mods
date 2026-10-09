@@ -2,3 +2,6 @@
 node_modules/
 # written by the engine when a mod loads
 */.claude-plugin/types/
+
+# rulesync's fetched copy of the playbook rules; the generated ones are committed
+.rulesync/rules/.curated/

@@ -1,0 +1,20 @@
+<!-- playbook:conversation-style v7 (2026-09-23) — structure only; wording moved to concision -->
+<!-- source: andrej-kolic/playbook .rulesync/rules/conversation-style.md; edits elsewhere are overwritten -->
+
+# Response Guidelines
+
+Applies to anything written for a reader: chat replies, PR and issue bodies, review comments, status reports, handoffs. README/docs prose, JSDoc comments, and commit messages have their own structure rules (`documentation`, `jsdoc`, `git`); generic code comments follow the project's own house style. This rule governs structure — what goes where. Length and wording, including lists, naming and pointers, are `concision`'s job.
+
+Apply the structure below to substantive or explanatory output. Skip it for short factual answers, one-line confirmations, or plain tool-output reports — state those directly instead.
+
+## Before responding
+
+A question gets an answer. Only an explicit instruction — an imperative, a "yes", a direct request to act — gets a file edit, a commit, or any other change. A message that reads as ambiguous between the two is a question until the user says otherwise.
+
+1. **Direct Opening** — Open with the answer or the core takeaway; `concision` (The first line is contractual) holds the test it must pass. It is also the top of the hierarchy below: the whole before the parts.
+
+2. **Goal Alignment** — Work out the user's real intent and context first, then organize the response around that goal instead of listing unstructured facts.
+
+3. **Cognitive Hierarchy** — After the opening, move from a high-level overview to a structural breakdown to specific details and examples, in that order.
+
+4. **Definite Closing** — End a substantive answer with a clear conclusion (a recommended course of action) or a single direct question. Skip this for short factual answers that need no follow-up.

@@ -1,0 +1,18 @@
+{
+  "targets": [
+    "claudecode",
+    "cursor"
+  ],
+  "features": [
+    "rules"
+  ],
+  "sources": [
+    {
+      "source": "andrej-kolic/playbook",
+      "rules": [
+        "*"
+      ],
+      "rulesPath": ".rulesync/rules"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+---
+description: 'Documentation and README conventions: which mode a doc is, and how to structure it.'
+globs: README.md,docs/**
+---
+
+<!-- playbook:documentation v3 (2026-09-23) — docs-as-code moved to git -->
+<!-- source: andrej-kolic/playbook .rulesync/rules/documentation.md; edits elsewhere are overwritten -->
+
+# Documentation Conventions
+
+Governs README and `docs/` prose — not JSDoc/API comments (see the separate `jsdoc` rule) and not conversational responses (see `conversation-style`). Length and wording, plain language included, are `concision`'s job.
+
+Defer to this project's own written documentation conventions where they exist — a style guide, a `CONTRIBUTING.md` section, or explicit conventions stated in the repo. The mere presence of a `docs/` folder isn't itself a convention — use the rules below unless there's an actual written standard to follow.
+
+1. **Know the mode before you write** — Per the [Diátaxis](https://diataxis.fr/) framework, a doc is one of four things: a tutorial (learning by doing), a how-to guide (steps for a specific task), a reference (facts to look up), or an explanation (background and why). Don't mix modes within one document. The README is the exception: Diátaxis treats an index/landing page as a hub, not a fifth mode — it's allowed to combine a short overview, a quick-start, and links out, because its job is to route the reader to the right single-mode doc, not to be one itself.
+2. **Keep the README short** — Overview, quick start, links out for depth. Push reference detail and background explanation into `docs/`, not the README itself.
+3. **Scale doc count to the project, not the README's job** — A small project might need only one or two files under `docs/` beyond the README. A larger one grows into the full Diátaxis structure — separate tutorial, how-to, reference, and explanation docs (or a dedicated docs site). Either way the README stays a short hub per rule 2 — this rule is about how many other documents exist, not about loosening rule 2.

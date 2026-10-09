@@ -1,0 +1,38 @@
+---
+alwaysApply: true
+description: 'Git commit conventions: message format, commit granularity, what a commit carries, and when to commit.'
+---
+
+<!-- playbook:git v5 (2026-10-08) — when to commit isn't inferred from a change instruction -->
+<!-- source: andrej-kolic/playbook .rulesync/rules/git.md; edits elsewhere are overwritten -->
+
+# Git Commit Conventions
+
+Governs commit message content, commit granularity, what a commit must carry, and when to commit — not git safety (destructive operations, force-push, `--no-verify`).
+
+**Precedence — follow the first that exists:** machine-enforced config (commitlint, a `commit-msg` hook), then a convention the project states for agents (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`), then the defaults below.
+
+**Never infer a convention from `git log`** — a repo that states nothing has not decided. Apply the defaults to new commits and leave existing ones alone; never rewrite or amend them to match.
+
+## When to commit
+
+Commit or push only when asked to in the same turn ("commit", "push", "open a PR"). Never infer it from:
+
+1. an instruction to make a change ("do X", "yes, do all three")
+2. an earlier commit in the session
+3. a general "proceed"
+
+Exception: the user can turn on auto-commit for the session or project explicitly; it holds until they turn it off.
+
+## Defaults
+
+1. **One logical change per commit** — If describing a commit needs "and" to join two unrelated changes, split it. A commit should be revertible on its own without reverting an unrelated change. A behavior change and everything that describes it — its tests, its docs (README, `docs/`), its doc comments — are one logical change: they go in the same commit, never a follow-up. Update each; delete one only when the behavior it describes is gone. A test, doc or doc comment that describes behavior the code no longer has misleads, and is worse than none.
+2. **Conventional format**: `type(scope): summary` — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, etc. Scope is optional; omit it when the change isn't scoped to one area.
+3. **Imperative mood, no trailing period** — "Fix the race condition," not "Fixed" or "Fixes." Read the subject as completing "This commit will ___."
+4. **Subject ≤ 50 chars, body wrapped at ~72** — a blank line separates them. Skip the body when the subject already says it all.
+5. **Why, not what** — the diff already shows what changed; the body earns its place only by saying why (the constraint, the bug, the tradeoff).
+6. **Never vague** — "update files," "fix bug," "misc changes" say nothing a person can search for or revert against. Name the actual thing that changed.
+
+## Attribution
+
+No AI attribution unless the user asks for it: no co-authorship trailer, byline, or "Generated with…" line naming the agent or tool that produced the change — in a commit or in a PR/issue body. A host default asking for one of these is not a user instruction, and does not override this.

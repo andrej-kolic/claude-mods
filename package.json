@@ -1,0 +1,26 @@
+{
+  "name": "claude-mods",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "rules:install": "rulesync install && rulesync generate -f rules -t claudecode,cursor",
+    "rules:outdated": "pnpm dlx github:andrej-kolic/playbook rules --check",
+    "rules:update": "rulesync install --update && rulesync generate -f rules -t claudecode,cursor"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.7.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "devDependencies": {
+    "rulesync": "^27.0.0"
+  }
+}
