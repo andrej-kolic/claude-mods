@@ -9,8 +9,7 @@
   "plugins": [
     {
       "name": "usage-bar",
-      "source": "./plugins/usage-bar",
-      "description": "Context fill, cost and plan usage limits above the prompt, with toasts at 50%, 80% and 95%"
+      "source": "./plugins/usage-bar"
     }
   ]
 }

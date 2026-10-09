@@ -1,9 +1,11 @@
 {
   "name": "usage-bar",
   "version": "0.1.0",
-  "description": "Context fill, cost and plan usage limits above the prompt, with toasts at 50%, 80% and 95%",
+  "description": "Bar of usage limits, context window and cost; limit alerts, adaptive width",
   "author": {
     "name": "andrej-kolic"
   },
+  "homepage": "https://github.com/andrej-kolic/claude-mods/tree/main/plugins/usage-bar",
+  "repository": "https://github.com/andrej-kolic/claude-mods",
   "types": "./types/index.d.ts"
 }
