@@ -37,6 +37,8 @@ Run a session with a mod loaded:
 claude --plugin-dir ./plugins/usage-band
 ```
 
+Load a mod this way once before editing it. Loading writes the API types to `.claude-plugin/types/`, which git ignores and the mod's `tsconfig.json` extends, so your editor and `tsc -p ./plugins/<mod>` find them.
+
 To publish a finished mod, add an entry for it to `.claude-plugin/marketplace.json`, with `"source": "./plugins/<mod>"`.
 
 Check it:
