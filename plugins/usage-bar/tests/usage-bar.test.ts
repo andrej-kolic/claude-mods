@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On, SessionRateLimit } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-const band = (bodyColumns = 120) =>
+const abovePrompt = (bodyColumns = 120) =>
   ({
     component: 'AbovePrompt',
     props: {
@@ -53,8 +53,8 @@ const session = (percentUsed: number): SessionRateLimit => ({ kind: 'five_hour',
 // Reset times are local, so a test compares the line with each time masked.
 const maskTimes = (text: string | undefined) => text?.replace(/([A-Z][a-z]{2} )?\d\d:\d\d/g, t => (t.length > 5 ? 'Ddd hh:mm' : 'hh:mm'))
 
-async function mountBand($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
-  const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...band(bodyColumns) })
+async function mountLine($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
+  const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...abovePrompt(bodyColumns) })
   const line = (await ui.find({ type: 'Box' }))?.text
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
@@ -62,23 +62,23 @@ async function mountBand($: Engine, surface: (typeof SURFACES)[number], bodyColu
   return { line, texts }
 }
 
-const bandText = async ($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) =>
-  (await mountBand($, surface, bodyColumns)).line
+const lineText = async ($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) =>
+  (await mountLine($, surface, bodyColumns)).line
 
 // The color of the Text that shows this percent.
 async function percentColor($: Engine, surface: (typeof SURFACES)[number], percent: string) {
-  const { texts } = await mountBand($, surface)
+  const { texts } = await mountLine($, surface)
 
   return texts.find(t => t.text.endsWith(` ${percent}`))?.props.color
 }
 
-describe('band', () => {
-  // Not logged in, or before Claude Code's first request: no reading has arrived yet.
-  test('showsWaitingPlaceholder_beforeTheFirstReading', async ($, on) => {
+describe('line', () => {
+  // Not logged in, or in the first seconds after startup: no reading has arrived yet.
+  test('showsNoDataPlaceholder_beforeTheFirstReading', async ($, on) => {
     mock.store(on)
 
     for (const surface of SURFACES) {
-      expect(await bandText($, surface)).toBe('usage: waiting for the first reply')
+      expect(await lineText($, surface)).toBe('usage: no data yet')
     }
   })
 
@@ -89,7 +89,36 @@ describe('band', () => {
     await measure($, [], 3, 0.12)
 
     for (const surface of SURFACES) {
-      expect(await bandText($, surface)).toBe('ctx 3% · $0.12')
+      expect(await lineText($, surface)).toBe('ctx 3% · $0.12')
+    }
+  })
+
+  // Claude Code's startup quota check: limits arrive before any response reports the context fill.
+  test('showsDashForCtx_inTheStartupReading', async ($, on) => {
+    mock.store(on)
+    recordToasts(on)
+    await $.session.measure({
+      context: { window: 200_000 },
+      rateLimits: [session(3), week(21)],
+      cost: { usd: 0 },
+      changed: ['rateLimits', 'cost'],
+    })
+
+    for (const surface of SURFACES) {
+      expect(maskTimes(await lineText($, surface))).toBe(
+        'ctx – · $0.00 · session ░░░░░░░░ 3% (resets hh:mm) · week █░░░░░░░ 21% (resets Ddd hh:mm)',
+      )
+    }
+  })
+
+  // Where Claude Code keeps no cost record, a reading has no cost: a dash, not a made-up $0.00.
+  test('showsDashForCost_whenReadingHasNoCost', async ($, on) => {
+    mock.store(on)
+    recordToasts(on)
+    await $.session.measure({ context: { window: 200_000, percent: 3 }, rateLimits: [], changed: ['context'] })
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('ctx 3% · $–')
     }
   })
 
@@ -99,7 +128,7 @@ describe('band', () => {
     await measure($, [session(41.9), week(18.6)], 62.7, 1.8)
 
     for (const surface of SURFACES) {
-      expect(maskTimes(await bandText($, surface))).toBe(
+      expect(maskTimes(await lineText($, surface))).toBe(
         'ctx 62% · $1.80 · session ███░░░░░ 41% (resets hh:mm) · week █░░░░░░░ 18% (resets Ddd hh:mm)',
       )
     }
@@ -120,7 +149,7 @@ describe('band', () => {
     ]
     for (const surface of SURFACES) {
       for (const [columns, line] of expected) {
-        expect(maskTimes(await bandText($, surface, columns))).toBe(line)
+        expect(maskTimes(await lineText($, surface, columns))).toBe(line)
       }
     }
   })
@@ -132,7 +161,7 @@ describe('band', () => {
 
     for (const surface of SURFACES) {
       for (const columns of [100, 76, 56]) {
-        expect((await bandText($, surface, columns))?.length).toBeLessThanOrEqual(columns)
+        expect((await lineText($, surface, columns))?.length).toBeLessThanOrEqual(columns)
       }
     }
   })
@@ -144,7 +173,7 @@ describe('band', () => {
     for (const [percent, shown] of [[12.4, '░░░░░░░░ 12%'], [99, '███████░ 99%'], [100, '████████ 100%']] as const) {
       await measure($, [week(percent)])
       for (const surface of SURFACES) {
-        expect(await bandText($, surface)).toContain(shown)
+        expect(await lineText($, surface)).toContain(shown)
       }
     }
   })

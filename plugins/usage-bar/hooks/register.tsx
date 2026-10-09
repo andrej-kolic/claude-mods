@@ -8,13 +8,13 @@ const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 const THRESHOLDS = [50, 80, 95]
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-// The two windows the band shows; any other kind (a gateway's spend_limit) is ignored.
+// The two windows the line shows; any other kind (a gateway's spend_limit) is ignored.
 const WINDOWS: Record<string, { label: string; letter: string; name: string; showsDay: boolean }> = {
   five_hour: { label: 'session', letter: 's', name: 'Session', showsDay: false },
   seven_day: { label: 'week', letter: 'w', name: 'Weekly', showsDay: true },
 }
 
-// The band's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-bar.md).
+// The line's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-bar.md).
 type Layout = 'full' | 'short-bars' | 'short' | 'tiny'
 const LAYOUTS: [minColumns: number, layout: Layout][] = [
   [100, 'full'],
@@ -25,7 +25,7 @@ const LAYOUTS: [minColumns: number, layout: Layout][] = [
 
 const BAR_CELLS = 8
 
-// A run of the band's line; a colored one shows a window's bar and percent.
+// A run of the line; a colored one shows a window's bar and percent.
 type Segment = { text: string; color?: 'warning' | 'error' }
 
 // What $.store holds per window kind: the period's resetsAt and the thresholds already toasted in it.
@@ -62,11 +62,13 @@ function windowSegments(limit: LimitReading, layout: Layout): Segment[] | undefi
   return [{ text: `${label} ` }, { text: shown, color: levelColor(limit.percentUsed) }, { text: resets }]
 }
 
-function bandSegments(r: Reading, columns: number): Segment[] {
+function lineSegments(r: Reading, columns: number): Segment[] {
   const layout = LAYOUTS.find(([min]) => columns >= min)?.[1] ?? 'tiny'
-  // A reading can come before any response reports the fill: a dash, not a made-up 0%.
+  // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
+  // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`
-  const segments: Segment[] = [{ text: `ctx ${ctx} · $${(r.usd ?? 0).toFixed(2)}` }]
+  const usd = r.usd === undefined ? '–' : r.usd.toFixed(2)
+  const segments: Segment[] = [{ text: `ctx ${ctx} · $${usd}` }]
 
   for (const limit of r.rateLimits) {
     const window = windowSegments(limit, layout)
@@ -115,21 +117,21 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
 
-    // No reading until Claude Code's first request, and none at all while not logged in: say so, so the band doesn't look missing.
+    // No reading until Claude Code's startup quota check, and none at all while not logged in: say so, so the line doesn't look missing.
     const r = await read($, reading)
     const { Box, Text } = $.ui.resolve(e)
 
     if (r === null) {
       return (
         <Box>
-          <Text dimColor>usage: waiting for the first reply</Text>
+          <Text dimColor>usage: no data yet</Text>
         </Box>
       )
     }
 
     return (
       <Box flexDirection="row">
-        {bandSegments(r, e.props.bodyColumns).map(({ text, color }) =>
+        {lineSegments(r, e.props.bodyColumns).map(({ text, color }) =>
           color ? <Text color={color}>{text}</Text> : <Text dimColor>{text}</Text>,
         )}
       </Box>
