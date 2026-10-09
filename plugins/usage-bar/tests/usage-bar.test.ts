@@ -65,11 +65,15 @@ async function mountLine($: Engine, surface: (typeof SURFACES)[number], bodyColu
 const lineText = async ($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) =>
   (await mountLine($, surface, bodyColumns)).line
 
-// The color of the Text that shows this percent.
-async function percentColor($: Engine, surface: (typeof SURFACES)[number], percent: string) {
+// The colors of the Text that shows this percent and of the Text that shows its bar; 'missing' when no Text shows a bar.
+async function limitColors($: Engine, surface: (typeof SURFACES)[number], percent: string) {
   const { texts } = await mountLine($, surface)
+  const bar = texts.find(t => /[█░]/.test(t.text))
 
-  return texts.find(t => t.text.endsWith(` ${percent}`))?.props.color
+  return {
+    percent: texts.find(t => t.text === percent)?.props.color,
+    bar: bar ? bar.props.color : 'missing',
+  }
 }
 
 describe('line', () => {
@@ -178,14 +182,14 @@ describe('line', () => {
     }
   })
 
-  test('colorsBarAndPercent_warningFrom50AndErrorFrom95', async ($, on) => {
+  test('colorsPercentOnly_warningFrom50AndErrorFrom95', async ($, on) => {
     mock.store(on)
     recordToasts(on)
 
     for (const [percent, color] of [[49.9, undefined], [50, 'warning'], [94, 'warning'], [95, 'error']] as const) {
       await measure($, [week(percent)])
       for (const surface of SURFACES) {
-        expect(await percentColor($, surface, `${Math.floor(percent)}%`)).toBe(color)
+        expect(await limitColors($, surface, `${Math.floor(percent)}%`)).toEqual({ percent: color, bar: undefined })
       }
     }
   })

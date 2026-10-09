@@ -25,7 +25,7 @@ const LAYOUTS: [minColumns: number, layout: Layout][] = [
 
 const BAR_CELLS = 8
 
-// A run of the line; a colored one shows a window's bar and percent.
+// A run of the line; a colored one shows a window's percent.
 type Segment = { text: string; color?: 'warning' | 'error' }
 
 // What $.store holds per window kind: the period's resetsAt and the thresholds already toasted in it.
@@ -55,11 +55,11 @@ function windowSegments(limit: LimitReading, layout: Layout): Segment[] | undefi
 
   const label = layout === 'full' ? window.label : window.letter
   const percent = `${Math.floor(limit.percentUsed)}%`
-  const shown = layout === 'full' || layout === 'short-bars' ? `${bar(limit.percentUsed)} ${percent}` : percent
+  const barText = layout === 'full' || layout === 'short-bars' ? `${bar(limit.percentUsed)} ` : ''
   const time = limit.resetsAt && layout !== 'tiny' ? resetTime(limit.resetsAt, window.showsDay) : undefined
   const resets = time === undefined ? '' : layout === 'full' ? ` (resets ${time})` : ` ↻ ${time}`
 
-  return [{ text: `${label} ` }, { text: shown, color: levelColor(limit.percentUsed) }, { text: resets }]
+  return [{ text: `${label} ${barText}` }, { text: percent, color: levelColor(limit.percentUsed) }, { text: resets }]
 }
 
 function lineSegments(r: Reading, columns: number): Segment[] {

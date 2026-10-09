@@ -10,7 +10,7 @@ Your plan's usage limits, context and cost on one dimmed line above the prompt, 
 
 ## Alerts
 
-A limit's bar and percent turn yellow at 50% and red at 95%. An alert appears at the top right at 50%, 80% and 95%:
+A limit's percent turns yellow at 50% and red at 95%; the bars stay grey. An alert appears at the top right at 50%, 80% and 95%:
 
 ![The session limit at 55% in yellow, with the alert "Session limit 55% used — resets 15:20"](images/yellow.png)
 

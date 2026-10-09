@@ -16,7 +16,7 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - Until the first reading, show `usage: no data yet`, dimmed, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
    - Off a subscription (an API key), readings carry no limits: show `ctx` and `$` only.
    - Each window's bar has 8 cells, each 12.5%, filled rounded down.
-   - Each window's bar and percent are coloured by the theme: `warning` from 50%, `error` from 95%, matching the toasts. The rest is dimmed.
+   - Each window's percent is coloured by the theme: `warning` from 50%, `error` from 95%, matching the toasts. The rest, bars included, is dimmed: full colour on a bar distracts.
    - The layout follows the line's available width (`bodyColumns`); each width's maximum length assumes `100%` in both windows and a cost like `$123.45`:
 
      | Width | Line | Max |
@@ -79,4 +79,4 @@ Use `claude plugin test`. Cover at least:
 7. The startup reading, limits but no context fill yet, shows `ctx – · $0.00` and both limits.
 8. Empty `rateLimits` never toast.
 9. Each width picks its layout at the 100, 76 and 56 column breakpoints, and the widest line fits its width.
-10. Bars fill rounded down, and colour turns `warning` at 50% and `error` at 95%.
+10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
