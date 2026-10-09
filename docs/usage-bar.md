@@ -1,4 +1,4 @@
-# usage-band
+# usage-bar
 
 A band above the prompt with the session's context fill and cost, plus the plan usage limits that claude.ai shows under Settings → Usage. Toasts warn as a limit fills up.
 

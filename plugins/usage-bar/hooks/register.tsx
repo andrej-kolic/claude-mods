@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
 
-const reading = atom({ plugin: 'usage-band', key: 'reading' } as const, null)
+const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 
 const THRESHOLDS = [50, 80, 95]
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -14,7 +14,7 @@ const WINDOWS: Record<string, { label: string; letter: string; name: string; sho
   seven_day: { label: 'week', letter: 'w', name: 'Weekly', showsDay: true },
 }
 
-// The band's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-band.md).
+// The band's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-bar.md).
 type Layout = 'full' | 'short-bars' | 'short' | 'tiny'
 const LAYOUTS: [minColumns: number, layout: Layout][] = [
   [100, 'full'],

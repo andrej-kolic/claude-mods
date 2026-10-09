@@ -54,7 +54,7 @@ const session = (percentUsed: number): SessionRateLimit => ({ kind: 'five_hour',
 const maskTimes = (text: string | undefined) => text?.replace(/([A-Z][a-z]{2} )?\d\d:\d\d/g, t => (t.length > 5 ? 'Ddd hh:mm' : 'hh:mm'))
 
 async function mountBand($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
-  const ui = await $.ui.mount({ plugin: 'usage-band', surface, ...band(bodyColumns) })
+  const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...band(bodyColumns) })
   const line = (await ui.find({ type: 'Box' }))?.text
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
