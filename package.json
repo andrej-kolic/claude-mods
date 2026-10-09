@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin test \"$d\" || exit 1; done",
+    "validate": "claude plugin validate . && for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin validate \"$d\" || exit 1; done",
     "rules:install": "rulesync install && rulesync generate -f rules -t claudecode,cursor",
     "rules:outdated": "pnpm dlx github:andrej-kolic/playbook rules --check",
     "rules:update": "rulesync install --update && rulesync generate -f rules -t claudecode,cursor"

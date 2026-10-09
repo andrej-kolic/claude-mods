@@ -38,3 +38,5 @@ claude plugin validate ./plugins/usage-band
 claude plugin test ./plugins/usage-band
 claude plugin validate .   # the marketplace file
 ```
+
+Or check the marketplace file and every mod at once with `pnpm validate` and `pnpm test`.
