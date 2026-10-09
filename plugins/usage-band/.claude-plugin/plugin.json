@@ -1,0 +1,9 @@
+{
+  "name": "usage-band",
+  "version": "0.1.0",
+  "description": "Context fill, cost and plan usage limits above the prompt, with toasts at 50%, 80% and 95%",
+  "author": {
+    "name": "andrej-kolic"
+  },
+  "types": "./types/index.d.ts"
+}

@@ -6,6 +6,14 @@ The repo is a plugin marketplace. Each mod lives in its own folder under `plugin
 
 ## Install
 
+Install a mod in one step (Claude Code 2.1.275 or later):
+
+```
+/plugin install usage-band --marketplace andrej-kolic/claude-mods
+```
+
+On older versions, add the marketplace first:
+
 ```
 /plugin marketplace add andrej-kolic/claude-mods
 /plugin install <mod>@claude-mods
@@ -17,7 +25,7 @@ Only mods listed in `.claude-plugin/marketplace.json` can be installed.
 
 | Mod | What it does | Status |
 |---|---|---|
-| `usage-band` | Shows context fill, cost and plan usage limits above the prompt, and warns at 50%, 80% and 95% | Planned: [spec](docs/usage-band.md) |
+| `usage-band` | Shows context fill, cost and plan usage limits above the prompt, and warns at 50%, 80% and 95% | Ready: [spec](docs/usage-band.md) |
 
 ## Develop a mod
 
