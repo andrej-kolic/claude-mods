@@ -1,0 +1,4 @@
+.DS_Store
+node_modules/
+# written by the engine when a mod loads
+*/.claude-plugin/types/
