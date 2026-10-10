@@ -2,15 +2,20 @@
 
 Your plan's usage limits, context and cost on one dimmed line above the prompt, with alerts before you run out.
 
-![The bar above Claude Code's prompt: ctx 62% · $1.84 · session 41% (resets 15:20) · week 18% (resets Mon 09:00)](images/normal.png)
+![The bar above Claude Code's prompt: context 62% · $1.84 on the left, session 41% (↻ 2h10m) · week 18% (↻ 3d2h) on the right](images/normal.png)
 
-- `ctx`: how full the context window is.
+On the left, this conversation:
+
+- `context`: how full the context window is.
 - `$`: what this session has cost.
-- `session` and `week`: how much of your 5-hour and weekly limits you've used, and when each resets, in your local time.
+
+On the right, your account's limits:
+
+- `session` and `week`: how much of your 5-hour and weekly limits you've used, and after `↻`, how long until each resets: `2h10m`, `3d2h`, or `now` once it has reset.
 
 ## Alerts
 
-A limit's percent turns yellow at 50% and red at 95%; the bars stay grey. An alert with the limit and its percent appears at the top right at 50%, 80% and 95%:
+A limit's percent turns yellow at 50% and red at 95%; the rest of the line stays grey. An alert with the limit and its percent appears at the top right at 50%, 80% and 95%:
 
 ![The session limit at 55% in yellow, with the alert "session 55%"](images/yellow.png)
 
@@ -23,15 +28,15 @@ When both limits cross at once, one alert names both: `session 62% · week 97%`.
 The line at the top is the full layout. When it doesn't fit, it shortens instead of wrapping, one step at a time:
 
 ```
-ctx 62% · $1.84 · s ███░░░░░ 41% ↻ 15:20 · w █░░░░░░░ 18% ↻ Mon 09:00
+ctx 62% · $1.84    s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
 ```
 
 ```
-ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00
+ctx 62% · $1.84    s 41% (↻ 2h10m) · w 18% (↻ 3d2h)
 ```
 
 ```
-ctx 62% · $1.84 · s 41% · w 18%
+ctx 62% · $1.84    s 41% · w 18%
 ```
 
 ## Before the first reading
@@ -42,7 +47,7 @@ For a few seconds after startup, and for as long as you're not logged in, the li
 usage: no data yet
 ```
 
-`ctx` shows `–` until your first reply, because Claude Code measures the context only when it answers.
+The context shows `–` until your first reply, because Claude Code measures the context only when it answers.
 
 ## What it is not
 
@@ -58,7 +63,7 @@ In Claude Code:
 ```
 
 - **Claude Code:** 2.1.275 or later for this one-step install. Tested on 2.1.295 and 2.1.296, in the terminal.
-- **Plan:** usage limits need a Claude subscription. With an API key, the line shows only `ctx` and `$`, and no alerts.
+- **Plan:** usage limits need a Claude subscription. With an API key, the line shows only the context and `$`, and no alerts.
 - **Context cost:** about 0 tokens. It adds nothing to what Claude reads.
 - **Where it shows:** Claude Code's terminal and the desktop app's Code tab. It does nothing on claude.ai or in Cowork.
 

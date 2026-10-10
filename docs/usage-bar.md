@@ -4,29 +4,30 @@ One line above the prompt with the session's context fill and cost, plus the pla
 
 ## Behaviour
 
-1. **Line.** One line above the prompt:
+1. **Line.** One line above the prompt, this conversation's figures on the left and the account's limits on the right:
 
    ```
-   ctx 62% · $1.84 · session ███░░░░░ 41% (resets 15:20) · week █░░░░░░░ 18% (resets Mon 09:00)
+   context 62% · $1.84                session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
    ```
 
-   - `ctx`: how full the context window is, as a whole percent rounded down; `–` while no response has reported it.
+   - `context` (`ctx` in the narrower layouts): how full the context window is, as a whole percent rounded down; `–` while no response has reported it.
    - `$`: what the session has cost so far, in US dollars with two decimals; `$–` where Claude Code keeps no cost record.
-   - `session` and `week`: whole percent used of the session window (`five_hour`) and the weekly window (`seven_day`), rounded down, with local reset times. `session` matches claude.ai's "Current session" and doesn't depend on the window's length.
+   - `session` and `week` (`s` and `w` in the narrower layouts): whole percent used of the session window (`five_hour`) and the weekly window (`seven_day`), rounded down, with the time left until each resets in brackets after `↻`, so it reads as part of its limit: `3d2h` from a day, `2h10m` from an hour, `45m` below, in whole minutes rounded up, a zero part dropped (`4h`, `3d`). Once the reset has passed with no new reading, `now`: the percent shown is the old period's until the next reading. A timer redraws the line every minute, since readings come only with turns and an idle line would go stale. `session` matches claude.ai's "Current session" and doesn't depend on the window's length.
    - Until the first reading, show `usage: no data yet`, dimmed, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
-   - Off a subscription (an API key), readings carry no limits: show `ctx` and `$` only.
-   - Each window's bar has 8 cells, each 12.5%, filled rounded down.
-   - Each window's percent is coloured by the theme: `warning` from 50%, `error` from 95%, matching the toasts. The rest, bars included, is dimmed: full colour on a bar distracts.
-   - The line shows the widest of these layouts whose text fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example, and at most, with `100%` in both windows and a cost like `$123.45`:
+   - Off a subscription (an API key), readings carry no limits: show context and `$` only.
+   - Each window's bar has 8 cells, each 12.5%, filled rounded down: `⣿` used, `⣀` left. Braille looks the same in Warp, iTerm2 and the desktop app and stays light; `█`/`░` draws as a dotted texture in iTerm2 and the desktop app.
+   - Each window's percent is coloured by the theme from 50%: `warning`, and `error` from 95%, matching the toasts. Everything else, percents below 50% and bars included, is dimmed: full colour on a bar distracts.
+   - No part of the line wraps; one that doesn't fit is cut short with `…`. While a desktop window is resized, a frame can draw the layout chosen for the previous width, and a wrapped part would make the row jump to two lines.
+   - The line shows the widest of these layouts whose two groups fit its available width (`bodyColumns`) with at least 2 spaces between them, so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths count the 2-space gap, for the example and at most, with `100%` in both windows, a cost like `$123.45` and the longest countdowns, `4h59m` and `23h59m`. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
 
-     | Layout | Line | Length | At most |
-     |---|---|---|---|
-     | Full | `ctx 62% · $1.84 · session ███░░░░░ 41% (resets 15:20) · week █░░░░░░░ 18% (resets Mon 09:00)` | 92 | 97 |
-     | Short, bars | `ctx 62% · $1.84 · s ███░░░░░ 41% ↻ 15:20 · w █░░░░░░░ 18% ↻ Mon 09:00` | 69 | 74 |
-     | Short | `ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00` | 51 | 56 |
-     | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 36 |
+     | Layout | Left | Right | Length | At most |
+     |---|---|---|---|---|
+     | Full | `context 62% · $1.84` | `session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 80 | 87 |
+     | Short, bars | `ctx 62% · $1.84` | `s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 67 | 74 |
+     | Short | `ctx 62% · $1.84` | `s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 49 | 56 |
+     | Tiny | `ctx 62% · $1.84` | `s 41% · w 18%` | 30 | 35 |
 
-2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The reset time is on the line, except in the tiny layout, where nothing shows it.
+2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The time to the reset is on the line, except in the tiny layout, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.
    - If one reading crosses several thresholds (40% → 96%), show one toast and mark them all as shown.
    - If one reading crosses thresholds in both windows, show one toast naming both: `session 62% · week 97%`. It fits one line of the desktop app's toast. The desktop app shows one toast per plugin at a time and drops the next.
@@ -53,7 +54,7 @@ Seen in Claude Code 2.1.295 and 2.1.296 on 2026-10-09, in `tmux` with `--plugin-
 Signed in with a subscription:
 
 1. **Startup, 0–2 s:** the line shows `usage: no data yet`.
-2. **About 2 s:** Claude Code sends its own `/v1/messages` request, `source=quota_check` in the debug log, before any `SessionStart` hook finishes. Its response carries the limits, so `session.measure` fires: `ctx – · $0.00 · session ░░░░░░░░ 3% (resets 01:10) · week █░░░░░░░ 21% (resets Sat 21:00)`.
+2. **About 2 s:** Claude Code sends its own `/v1/messages` request, `source=quota_check` in the debug log, before any `SessionStart` hook finishes. Its response carries the limits, so `session.measure` fires (the line's format then): `ctx – · $0.00 · session ░░░░░░░░ 3% (resets 01:10) · week █░░░░░░░ 21% (resets Sat 21:00)`.
 3. **First reply:** the response reports the context used, everything loaded at startup included: `ctx 4% · $0.14 · …`.
 4. **Each later turn:** `session.measure` fires with new figures; a crossed threshold toasts.
 
@@ -68,7 +69,8 @@ A toast's text is one line: a `\n` in it draws as `�` in the terminal.
 Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`):
 
 1. The line draws above the prompt in the theme's colours, and the layouts switch with the window's width. `bodyColumns` follows the window: 78 narrow, 95 at its widest. A desktop column is a little wider than the font's average character, so a line that fits `bodyColumns` never overflows. Under the old fixed breakpoints (full from 100) a wide window never got the full layout.
-2. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
+2. While the window is resized, a frame can briefly draw the layout chosen for the previous width; parts that wrapped made the row jump to two lines, hence no wrapping.
+3. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
 
 API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only `ctx` and `$` and never toasts.
 
@@ -80,14 +82,15 @@ API key, no subscription: not observed. Per the API docs, `rateLimits` stays emp
 
 Use `claude plugin test`. Cover at least:
 
-1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only `ctx` and `$`.
+1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only context and `$`.
 2. Crossing 50%, 80% and 95% each toasts once, and exactly 50% counts as crossed.
 3. A jump from 40% to 96% shows one toast, `week 96%`, and no later toast for 50% or 80%.
 4. Staying above a threshold, reloading, or starting a session in another project does not repeat the toast.
 5. A new `resetsAt` re-arms all thresholds.
-6. The line rounds `ctx` and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
-7. The startup reading, limits but no context fill yet, shows `ctx – · $0.00` and both limits.
+6. The line rounds the context and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
+7. The startup reading, limits but no context fill yet, shows `context – · $0.00` and both limits.
 8. Empty `rateLimits` never toast.
-9. Each width shows the widest layout whose line fits it, and the line fits every width the tiny layout fits.
+9. Each width shows the widest layout whose groups fit it with a 2-space gap, conversation left and limits right, and the line fits every width the tiny layout fits.
 10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
 11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.
+12. Each reset counts down in days and hours, hours and minutes, or minutes, rounded up, a zero part dropped and `now` once passed, and the countdown moves on each minute without a new reading.

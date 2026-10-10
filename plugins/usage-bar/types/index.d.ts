@@ -8,6 +8,6 @@ export type Reading = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'usage-bar': { reading: Reading | null }
+    'usage-bar': { reading: Reading | null; minute: number }
   }
 }

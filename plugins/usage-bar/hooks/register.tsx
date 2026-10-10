@@ -4,16 +4,17 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { LimitReading, Reading } from '../types'
 
 const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
+// Bumped each minute so the countdowns redraw while no reading arrives.
+const minute = atom({ plugin: 'usage-bar', key: 'minute' } as const, 0)
 
 const THRESHOLDS = [50, 80, 95]
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-type Window = { label: string; letter: string; showsDay: boolean }
+type Window = { label: string; letter: string }
 
 // The two windows the line shows; any other kind (a gateway's spend_limit) is ignored.
 const WINDOWS: Record<string, Window> = {
-  five_hour: { label: 'session', letter: 's', showsDay: false },
-  seven_day: { label: 'week', letter: 'w', showsDay: true },
+  five_hour: { label: 'session', letter: 's' },
+  seven_day: { label: 'week', letter: 'w' },
 }
 
 // The line's layouts, widest first: the line uses the first whose text fits bodyColumns (see docs/usage-bar.md).
@@ -28,57 +29,77 @@ type Segment = { text: string; color?: 'warning' | 'error' }
 // What $.store holds per window kind: the period's resetsAt and the thresholds already toasted in it.
 type Toasted = { resetsAt: string; thresholds: number[] }
 
-const pad = (n: number) => String(n).padStart(2, '0')
+// Time left until resetsAt, in whole minutes rounded up: `3d2h`, `2h10m`, `45m`; a zero part is dropped, `4h`.
+// `now` once it has passed: the limit has reset, and the next reading brings the new period's percent.
+function countdown(resetsAt: string, now: number): string {
+  const minutes = Math.max(0, Math.ceil((new Date(resetsAt).getTime() - now) / 60_000))
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
 
-function resetTime(resetsAt: string, showsDay: boolean): string {
-  const date = new Date(resetsAt)
-  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const part = (n: number, unit: string) => (n > 0 ? `${n}${unit}` : '')
 
-  return showsDay ? `${DAYS[date.getDay()]} ${time}` : time
+  return days > 0 ? `${days}d${part(hours, 'h')}` : hours > 0 ? `${hours}h${part(minutes % 60, 'm')}` : minutes > 0 ? `${minutes}m` : 'now'
 }
 
 function bar(percent: number): string {
   const filled = Math.min(BAR_CELLS, Math.max(0, Math.floor((percent / 100) * BAR_CELLS)))
 
-  return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled)
+  // Braille: a full cell against a low baseline looks the same in every terminal and the desktop app, and stays light.
+  return '⣿'.repeat(filled) + '⣀'.repeat(BAR_CELLS - filled)
 }
 
 const levelColor = (percent: number): Segment['color'] =>
   percent >= 95 ? 'error' : percent >= 50 ? 'warning' : undefined
 
-function windowSegments(limit: LimitReading, layout: Layout): Segment[] | undefined {
+function windowSegments(limit: LimitReading, layout: Layout, now: number): Segment[] | undefined {
   const window = WINDOWS[limit.kind]
   if (!window) return undefined
 
   const label = layout === 'full' ? window.label : window.letter
   const percent = `${Math.floor(limit.percentUsed)}%`
   const barText = layout === 'full' || layout === 'short-bars' ? `${bar(limit.percentUsed)} ` : ''
-  const time = limit.resetsAt && layout !== 'tiny' ? resetTime(limit.resetsAt, window.showsDay) : undefined
-  const resets = time === undefined ? '' : layout === 'full' ? ` (resets ${time})` : ` ↻ ${time}`
+  const time = limit.resetsAt && layout !== 'tiny' ? countdown(limit.resetsAt, now) : undefined
+  const resets = time === undefined ? '' : ` (↻ ${time})`
 
   return [{ text: `${label} ${barText}` }, { text: percent, color: levelColor(limit.percentUsed) }, { text: resets }]
 }
 
-function lineSegments(r: Reading, columns: number): Segment[] {
-  const fits = (segments: Segment[]) => segments.reduce((n, s) => n + s.text.length, 0) <= columns
+// The line in two groups of items: this conversation's figures on the left, the account's limits on the right.
+// Items are drawn apart with a dot between and a one-column gap either side of it, not a typed ` · `: the
+// desktop app's spaces are narrower than a column.
+type Item = Segment[]
+type Groups = { conversation: Item[]; limits: Item[] }
+const SEPARATOR = 3
+
+// The narrowest gap between the groups.
+const GAP = 2
+
+const groupLength = (items: Item[]) =>
+  items.reduce((n, item) => n + item.reduce((m, s) => m + s.text.length, 0), 0) +
+  Math.max(0, items.length - 1) * SEPARATOR
+
+function lineGroups(r: Reading, columns: number, now: number): Groups {
+  const fits = ({ conversation, limits }: Groups) =>
+    groupLength(conversation) + (limits.length > 0 ? GAP + groupLength(limits) : 0) <= columns
 
   // The narrowest layout shows even where nothing fits.
-  return LAYOUTS.map(layout => layoutSegments(r, layout)).find(fits) ?? layoutSegments(r, 'tiny')
+  return LAYOUTS.map(layout => layoutGroups(r, layout, now)).find(fits) ?? layoutGroups(r, 'tiny', now)
 }
 
-function layoutSegments(r: Reading, layout: Layout): Segment[] {
+function layoutGroups(r: Reading, layout: Layout, now: number): Groups {
   // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
   // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`
   const usd = r.usd === undefined ? '–' : r.usd.toFixed(2)
-  const segments: Segment[] = [{ text: `ctx ${ctx} · $${usd}` }]
+  const conversation: Item[] = [[{ text: `${layout === 'full' ? 'context' : 'ctx'} ${ctx}` }], [{ text: `$${usd}` }]]
 
+  const limits: Item[] = []
   for (const limit of r.rateLimits) {
-    const window = windowSegments(limit, layout)
-    if (window) segments.push({ text: ' · ' }, ...window)
+    const window = windowSegments(limit, layout, now)
+    if (window) limits.push(window.filter(segment => segment.text !== ''))
   }
 
-  return segments.filter(segment => segment.text !== '')
+  return { conversation, limits }
 }
 
 // The record to save when the window crossed a threshold not yet toasted this period, else undefined.
@@ -99,6 +120,12 @@ const toastText = (limits: { limit: LimitReading; window: Window }[]): string =>
   limits.map(({ limit, window }) => `${window.label} ${Math.floor(limit.percentUsed)}%`).join(' · ')
 
 export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    $.clock.every(60_000, () => void update($, minute, n => n + 1))
+
+    return next(e)
+  })
+
   on('session.measure', async ($, e, next) => {
     const r: Reading = {
       contextPercent: e.context.percent,
@@ -138,10 +165,37 @@ export const register: Register = on => {
       )
     }
 
+    await read($, minute)
+    const { conversation, limits } = lineGroups(r, e.props.bodyColumns, await $.clock.now())
+    // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
+    // and a wrapped piece would make the row jump to two lines. Cut it short instead.
+    const draw = (group: string, items: Item[]) =>
+      items.flatMap((item, i) => [
+        ...(i > 0 ? [<Text dimColor wrap="truncate-end">·</Text>] : []),
+        <Box key={`${group}:${i}`} flexDirection="row">
+          {item.map(({ text, color }) =>
+            color ? (
+              <Text color={color} wrap="truncate-end">
+                {text}
+              </Text>
+            ) : (
+              <Text dimColor wrap="truncate-end">
+                {text}
+              </Text>
+            ),
+          )}
+        </Box>,
+      ])
+
     return (
-      <Box flexDirection="row">
-        {lineSegments(r, e.props.bodyColumns).map(({ text, color }) =>
-          color ? <Text color={color}>{text}</Text> : <Text dimColor>{text}</Text>,
+      <Box flexDirection="row" justifyContent="space-between" columnGap={GAP} width="100%">
+        <Box flexDirection="row" columnGap={1}>
+          {draw('conversation', conversation)}
+        </Box>
+        {limits.length > 0 && (
+          <Box flexDirection="row" columnGap={1}>
+            {draw('limits', limits)}
+          </Box>
         )}
       </Box>
     )

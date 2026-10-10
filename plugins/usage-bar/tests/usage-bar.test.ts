@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On, SessionRateLimit } from 'claude-code'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
 
 const abovePrompt = (bodyColumns = 120) =>
   ({
@@ -17,7 +17,10 @@ const abovePrompt = (bodyColumns = 120) =>
 
 const SURFACES = ['terminal', 'desktop'] as const
 
-const PERIOD = '2026-10-12T07:00:00Z'
+// The clock every test runs at, and the resets the line counts down to from it.
+const NOW = Date.parse('2026-10-09T05:00:00Z')
+const SESSION_PERIOD = '2026-10-09T07:10:00Z' // (↻ 2h10m)
+const PERIOD = '2026-10-12T07:00:00Z' // (↻ 3d2h)
 const NEXT_PERIOD = '2026-10-19T07:00:00Z'
 
 const week = (percentUsed: number, resetsAt = PERIOD): SessionRateLimit => ({
@@ -26,8 +29,9 @@ const week = (percentUsed: number, resetsAt = PERIOD): SessionRateLimit => ({
   resetsAt,
 })
 
-// Stands for the engine beneath the plugin: records toasts and answers session.measure.
-function recordToasts(on: On): string[] {
+// Stands for the engine beneath the plugin: records toasts, answers session.measure, and runs a clock from NOW.
+function engineBeneath(on: On): { toasts: string[]; clock: MockClock } {
+  const clock = mock.clock(on, { now: NOW })
   const toasts: string[] = []
   on('ui.toast', ($, e) => {
     toasts.push(e.text)
@@ -37,7 +41,7 @@ function recordToasts(on: On): string[] {
   // The engine's own measure beneath the plugin, echoing what changed.
   on('session.measure', ($, e) => ({ changed: e.changed }))
 
-  return toasts
+  return { toasts, clock }
 }
 
 const measure = ($: Engine, rateLimits: SessionRateLimit[], percent = 10, usd = 0) =>
@@ -48,14 +52,24 @@ const measure = ($: Engine, rateLimits: SessionRateLimit[], percent = 10, usd = 
     changed: ['context', 'rateLimits', 'cost'],
   })
 
-const session = (percentUsed: number): SessionRateLimit => ({ kind: 'five_hour', percentUsed, resetsAt: PERIOD })
+const session = (percentUsed: number, resetsAt = SESSION_PERIOD): SessionRateLimit => ({ kind: 'five_hour', percentUsed, resetsAt })
 
-// Reset times are local, so a test compares the line with each time masked.
-const maskTimes = (text: string | undefined) => text?.replace(/([A-Z][a-z]{2} )?\d\d:\d\d/g, t => (t.length > 5 ? 'Ddd hh:mm' : 'hh:mm'))
 
 async function mountLine($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
   const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...abovePrompt(bodyColumns) })
-  const line = (await ui.find({ type: 'Box' }))?.text
+  // Each group's items are drawn apart with a dot between; ` · ` stands for that, and two spaces, the narrowest gap,
+  // for the space between the conversation's figures on the left and the limits on the right.
+  const boxes = await ui.findAll({ type: 'Box' })
+  const group = (name: string) =>
+    boxes.filter(box => box.key?.startsWith(`${name}:`)).map(box => box.text).join(' · ') || undefined
+  const left = group('conversation')
+  const right = group('limits')
+  // The gaps those stand for are the layout's, not typed spaces: one column either side of each dot, two between groups.
+  if (left !== undefined) {
+    expect(boxes.find(box => box.props.justifyContent === 'space-between')?.props.columnGap).toBe(2)
+    expect(boxes.filter(box => box.props.columnGap === 1)).toHaveLength(right ? 2 : 1)
+  }
+  const line = left === undefined ? boxes[0]?.text : right ? `${left}  ${right}` : left
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
 
@@ -68,7 +82,7 @@ const lineText = async ($: Engine, surface: (typeof SURFACES)[number], bodyColum
 // The colors of the Text that shows this percent and of the Text that shows its bar; 'missing' when no Text shows a bar.
 async function limitColors($: Engine, surface: (typeof SURFACES)[number], percent: string) {
   const { texts } = await mountLine($, surface)
-  const bar = texts.find(t => /[█░]/.test(t.text))
+  const bar = texts.find(t => /[⣿⣀]/.test(t.text))
 
   return {
     percent: texts.find(t => t.text === percent)?.props.color,
@@ -89,18 +103,18 @@ describe('line', () => {
   // An API-key user, off a subscription, gets readings with no rate limits.
   test('showsOnlyCtxAndCost_whenRateLimitsAreEmpty', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await measure($, [], 3, 0.12)
 
     for (const surface of SURFACES) {
-      expect(await lineText($, surface)).toBe('ctx 3% · $0.12')
+      expect(await lineText($, surface)).toBe('context 3% · $0.12')
     }
   })
 
   // Claude Code's startup quota check: limits arrive before any response reports the context fill.
   test('showsDashForCtx_inTheStartupReading', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await $.session.measure({
       context: { window: 200_000 },
       rateLimits: [session(3), week(21)],
@@ -109,8 +123,8 @@ describe('line', () => {
     })
 
     for (const surface of SURFACES) {
-      expect(maskTimes(await lineText($, surface))).toBe(
-        'ctx – · $0.00 · session ░░░░░░░░ 3% (resets hh:mm) · week █░░░░░░░ 21% (resets Ddd hh:mm)',
+      expect((await lineText($, surface))).toBe(
+        'context – · $0.00  session ⣀⣀⣀⣀⣀⣀⣀⣀ 3% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 21% (↻ 3d2h)',
       )
     }
   })
@@ -118,49 +132,49 @@ describe('line', () => {
   // Where Claude Code keeps no cost record, a reading has no cost: a dash, not a made-up $0.00.
   test('showsDashForCost_whenReadingHasNoCost', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await $.session.measure({ context: { window: 200_000, percent: 3 }, rateLimits: [], changed: ['context'] })
 
     for (const surface of SURFACES) {
-      expect(await lineText($, surface)).toBe('ctx 3% · $–')
+      expect(await lineText($, surface)).toBe('context 3% · $–')
     }
   })
 
   test('roundsPercentsDownAndShowsCostWithTwoDecimals', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await measure($, [session(41.9), week(18.6)], 62.7, 1.8)
 
     for (const surface of SURFACES) {
-      expect(maskTimes(await lineText($, surface))).toBe(
-        'ctx 62% · $1.80 · session ███░░░░░ 41% (resets hh:mm) · week █░░░░░░░ 18% (resets Ddd hh:mm)',
+      expect((await lineText($, surface))).toBe(
+        'context 62% · $1.80  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
       )
     }
   })
 
-  // Masked times are as long as real ones, so each line's length is the width it needs.
+  // Each line's length is the width it needs.
   test('picksTheWidestLayoutThatFits_byTheLinesActualLength', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await measure($, [session(41), week(18)], 62, 1.84)
 
     const layouts = [
-      'ctx 62% · $1.84 · session ███░░░░░ 41% (resets hh:mm) · week █░░░░░░░ 18% (resets Ddd hh:mm)',
-      'ctx 62% · $1.84 · s ███░░░░░ 41% ↻ hh:mm · w █░░░░░░░ 18% ↻ Ddd hh:mm',
-      'ctx 62% · $1.84 · s 41% ↻ hh:mm · w 18% ↻ Ddd hh:mm',
-      'ctx 62% · $1.84 · s 41% · w 18%',
+      'context 62% · $1.84  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84  s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84  s 41% (↻ 2h10m) · w 18% (↻ 3d2h)',
+      'ctx 62% · $1.84  s 41% · w 18%',
     ]
     for (const surface of SURFACES) {
       for (const [i, line] of layouts.entries()) {
-        expect(maskTimes(await lineText($, surface, line.length))).toBe(line)
-        expect(maskTimes(await lineText($, surface, line.length - 1))).toBe(layouts[i + 1] ?? line)
+        expect((await lineText($, surface, line.length))).toBe(line)
+        expect((await lineText($, surface, line.length - 1))).toBe(layouts[i + 1] ?? line)
       }
     }
   })
 
   test('fitsItsWidth_downToTheNarrowestLayout', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
     await measure($, [session(100), week(100)], 100, 123.45)
 
     for (const surface of SURFACES) {
@@ -170,11 +184,49 @@ describe('line', () => {
     }
   })
 
+  test('countsDownToEachReset_inDaysAndHoursOrHoursAndMinutes_droppingAZeroPart', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const at = (ms: number) => new Date(NOW + ms).toISOString()
+
+    for (const [resetsAt, shown] of [
+      [at(3 * 86_400_000 + 2 * 3_600_000 + 59 * 60_000), '(↻ 3d2h)'],
+      [at(2 * 3_600_000 + 10 * 60_000), '(↻ 2h10m)'],
+      [at(3 * 86_400_000), '(↻ 3d)'],
+      [at(4 * 3_600_000), '(↻ 4h)'],
+      [at(45 * 60_000), '(↻ 45m)'],
+      [at(30_000), '(↻ 1m)'],
+      // A reset already passed while no new reading came: the shown percent is last period's.
+      [at(-60_000), '(↻ now)'],
+    ] as const) {
+      await measure($, [session(10, resetsAt)])
+      for (const surface of SURFACES) {
+        expect(await lineText($, surface)).toContain(shown)
+      }
+    }
+  })
+
+  // Readings come only with turns, so an idle session's countdown moves on a timer of its own.
+  test('redrawsTheCountdownEachMinute_withoutANewReading', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await measure($, [session(10)])
+
+    const ui = await $.ui.mount({ plugin: 'usage-bar', surface: 'terminal', ...abovePrompt() })
+    const countdown = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'limits:0')?.text
+    expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h10m)')
+    await clock.advance(60_000)
+    expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h9m)')
+    await ui.unmount()
+  })
+
   test('fillsBarRoundedDown_soItNeverLooksFullerThanItIs', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
 
-    for (const [percent, shown] of [[12.4, '░░░░░░░░ 12%'], [99, '███████░ 99%'], [100, '████████ 100%']] as const) {
+    for (const [percent, shown] of [[12.4, '⣀⣀⣀⣀⣀⣀⣀⣀ 12%'], [99, '⣿⣿⣿⣿⣿⣿⣿⣀ 99%'], [100, '⣿⣿⣿⣿⣿⣿⣿⣿ 100%']] as const) {
       await measure($, [week(percent)])
       for (const surface of SURFACES) {
         expect(await lineText($, surface)).toContain(shown)
@@ -184,7 +236,7 @@ describe('line', () => {
 
   test('colorsPercentOnly_warningFrom50AndErrorFrom95', async ($, on) => {
     mock.store(on)
-    recordToasts(on)
+    engineBeneath(on)
 
     for (const [percent, color] of [[49.9, undefined], [50, 'warning'], [94, 'warning'], [95, 'error']] as const) {
       await measure($, [week(percent)])
@@ -198,7 +250,7 @@ describe('line', () => {
 describe('toasts', () => {
   test('toastsEachThresholdOnce_andCountsExactly50AsCrossed', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     for (const percent of [49.9, 50, 51, 80, 95]) {
       await measure($, [week(percent)])
@@ -210,7 +262,7 @@ describe('toasts', () => {
 
   test('toastsOnlyTheHighest_whenOneReadingCrossesSeveral', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [week(40)])
     await measure($, [week(96)])
@@ -223,7 +275,7 @@ describe('toasts', () => {
   // An API-key user, off a subscription, gets readings with no rate limits.
   test('neverToasts_whenRateLimitsAreEmpty', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [], 96, 5)
 
@@ -232,7 +284,7 @@ describe('toasts', () => {
 
   test('doesNotRepeat_whenStayingAboveAThreshold', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     for (const percent of [55, 60, 70]) {
       await measure($, [week(percent)])
@@ -244,7 +296,7 @@ describe('toasts', () => {
   // A reload, or a new session in any project, starts with an empty module and the same user-global store.
   test('doesNotRepeat_afterReloadOrNewSession', async ($, on) => {
     mock.store(on, { 'toasted:seven_day': { resetsAt: PERIOD, thresholds: [50] } })
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [week(60)])
 
@@ -253,7 +305,7 @@ describe('toasts', () => {
 
   test('reArmsAllThresholds_whenResetsAtChanges', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [week(96)])
     await measure($, [week(2, NEXT_PERIOD)])
@@ -266,7 +318,7 @@ describe('toasts', () => {
   // The desktop app shows one toast per plugin at a time and drops the next, so a second toast from one reading would be lost.
   test('showsOneToastNamingBoth_whenOneReadingCrossesBothWindows', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [session(62), week(97)])
 
@@ -285,7 +337,7 @@ describe('toasts', () => {
 
       return { value: undefined }
     })
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [session(62), week(97)]).catch(() => undefined)
 
@@ -294,7 +346,7 @@ describe('toasts', () => {
 
   test('tracksSessionAndWeeklyWindowsSeparately', async ($, on) => {
     mock.store(on)
-    const toasts = recordToasts(on)
+    const { toasts } = engineBeneath(on)
 
     await measure($, [session(50), week(50)])
     await measure($, [session(80), week(55)])
