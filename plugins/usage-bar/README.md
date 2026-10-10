@@ -49,6 +49,8 @@ usage: no data yet
 
 The context shows `–` until your first reply, because Claude Code measures the context only when it answers.
 
+In the desktop app, a new session and `/clear` show no line at all until you send a message: the app starts Claude Code only then.
+
 ## What it is not
 
 - **Not a status line.** It sits above the prompt and leaves your status line alone.

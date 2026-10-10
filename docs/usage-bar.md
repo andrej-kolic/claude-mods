@@ -75,12 +75,14 @@ Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_P
 1. The line draws above the prompt in the theme's colours, and the layouts switch with the window's width. `bodyColumns` follows the window: 78 narrow, 95 at its widest. A desktop column is a little wider than the font's average character, so a line that fits `bodyColumns` never overflows. Under the old fixed breakpoints (full from 100) a wide window never got the full layout.
 2. While the window is resized, a frame can briefly draw the layout chosen for the previous width; parts that wrapped made the row jump to two lines, hence no wrapping.
 3. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
+4. A new session, and `/clear` (2.1.295, 2026-10-10), show no line at all until the first message. The app starts Claude Code only when a message is sent, and `/clear` stops it (`LocalSessions.clearSession` in `~/Library/Logs/Claude/main.log`, then `session spawn` at the next message), so no plugin runs to draw.
 
 API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only the context and `$` and never toasts.
 
 ## Limits
 
 - Limit figures come from Claude's latest API response, not from claude.ai. They refresh only while this session makes requests, so usage from other sessions shows up here only after this session's next request.
+- In the desktop app, the line is missing in a new session and after `/clear` until the first message: Claude Code isn't running then, so no plugin can draw.
 
 ## Tests
 
