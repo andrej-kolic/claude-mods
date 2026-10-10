@@ -73,7 +73,7 @@ Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_P
 2. While the window is resized, a frame can briefly draw the layout chosen for the previous width; parts that wrapped made the row jump to two lines, hence no wrapping.
 3. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
 
-API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only `ctx` and `$` and never toasts.
+API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only the context and `$` and never toasts.
 
 ## Limits
 
