@@ -110,3 +110,5 @@ Then check live what the tests can't reach: Claude Code's own events and a real 
 4. Left for a minute after `/clear`: the countdown moves on.
 5. `tmux resize-window` from 160 columns down to 30: each layout in turn, then cut short with `…`.
 6. A terminal 11 rows tall: the line is hidden; 12 rows: it shows.
+
+The README's screenshots come from `scripts/usage-bar-shots/shoot.sh`: retake them after a change to the line or the alerts.
