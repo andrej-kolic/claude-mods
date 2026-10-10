@@ -57,19 +57,13 @@ const session = (percentUsed: number, resetsAt = SESSION_PERIOD): SessionRateLim
 
 async function mountLine($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
   const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...abovePrompt(bodyColumns) })
-  // Each group's items are drawn apart with a dot between; ` · ` stands for that, and two spaces, the narrowest gap,
-  // for the space between the conversation's figures on the left and the limits on the right.
+  // Items are drawn apart with a dot between; ` · ` stands for that.
   const boxes = await ui.findAll({ type: 'Box' })
-  const group = (name: string) =>
-    boxes.filter(box => box.key?.startsWith(`${name}:`)).map(box => box.text).join(' · ') || undefined
-  const left = group('conversation')
-  const right = group('limits')
-  // The gaps those stand for are the layout's, not typed spaces: one column either side of each dot, two between groups.
-  if (left !== undefined) {
-    expect(boxes.find(box => box.props.justifyContent === 'space-between')?.props.columnGap).toBe(2)
-    expect(boxes.filter(box => box.props.columnGap === 1)).toHaveLength(right ? 2 : 1)
-  }
-  const line = left === undefined ? boxes[0]?.text : right ? `${left}  ${right}` : left
+  const items = boxes.filter(box => box.key?.startsWith('item:')).map(box => box.text)
+  // The whole line sits at the right edge, and the gap either side of each dot is the layout's, not typed spaces.
+  expect(boxes[0]?.props.justifyContent).toBe('flex-end')
+  if (items.length > 0) expect(boxes[0]?.props.columnGap).toBe(1)
+  const line = items.length > 0 ? items.join(' · ') : boxes[0]?.text
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
 
@@ -124,7 +118,7 @@ describe('line', () => {
 
     for (const surface of SURFACES) {
       expect((await lineText($, surface))).toBe(
-        'context – · $0.00  session ⣀⣀⣀⣀⣀⣀⣀⣀ 3% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 21% (↻ 3d2h)',
+        'context – · $0.00 · session ⣀⣀⣀⣀⣀⣀⣀⣀ 3% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 21% (↻ 3d2h)',
       )
     }
   })
@@ -147,7 +141,7 @@ describe('line', () => {
 
     for (const surface of SURFACES) {
       expect((await lineText($, surface))).toBe(
-        'context 62% · $1.80  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+        'context 62% · $1.80 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
       )
     }
   })
@@ -159,10 +153,10 @@ describe('line', () => {
     await measure($, [session(41), week(18)], 62, 1.84)
 
     const layouts = [
-      'context 62% · $1.84  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s 41% (↻ 2h10m) · w 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s 41% · w 18%',
+      'context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s 41% · w 18%',
     ]
     for (const surface of SURFACES) {
       for (const [i, line] of layouts.entries()) {
@@ -215,7 +209,7 @@ describe('line', () => {
     await measure($, [session(10)])
 
     const ui = await $.ui.mount({ plugin: 'usage-bar', surface: 'terminal', ...abovePrompt() })
-    const countdown = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'limits:0')?.text
+    const countdown = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'item:2')?.text
     expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h10m)')
     await clock.advance(60_000)
     expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h9m)')

@@ -1,6 +1,6 @@
 {
   "name": "usage-bar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Usage limits, context and cost above the prompt; keeps your status line",
   "author": {
     "name": "andrej-kolic"

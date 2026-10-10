@@ -64,29 +64,24 @@ function windowSegments(limit: LimitReading, layout: Layout, now: number): Segme
   return [{ text: `${label} ${barText}` }, { text: percent, color: levelColor(limit.percentUsed) }, { text: resets }]
 }
 
-// The line in two groups of items: this conversation's figures on the left, the account's limits on the right.
+// The line's items at the right edge: this conversation's figures, then the account's limits.
 // Items are drawn apart with a dot between and a one-column gap either side of it, not a typed ` · `: the
 // desktop app's spaces are narrower than a column.
 type Item = Segment[]
-type Groups = { conversation: Item[]; limits: Item[] }
 const SEPARATOR = 3
 
-// The narrowest gap between the groups.
-const GAP = 2
-
-const groupLength = (items: Item[]) =>
+const lineLength = (items: Item[]) =>
   items.reduce((n, item) => n + item.reduce((m, s) => m + s.text.length, 0), 0) +
   Math.max(0, items.length - 1) * SEPARATOR
 
-function lineGroups(r: Reading, columns: number, now: number): Groups {
-  const fits = ({ conversation, limits }: Groups) =>
-    groupLength(conversation) + (limits.length > 0 ? GAP + groupLength(limits) : 0) <= columns
+function lineItems(r: Reading, columns: number, now: number): Item[] {
+  const fits = (items: Item[]) => lineLength(items) <= columns
 
   // The narrowest layout shows even where nothing fits.
-  return LAYOUTS.map(layout => layoutGroups(r, layout, now)).find(fits) ?? layoutGroups(r, 'tiny', now)
+  return LAYOUTS.map(layout => layoutItems(r, layout, now)).find(fits) ?? layoutItems(r, 'tiny', now)
 }
 
-function layoutGroups(r: Reading, layout: Layout, now: number): Groups {
+function layoutItems(r: Reading, layout: Layout, now: number): Item[] {
   // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
   // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`
@@ -99,7 +94,7 @@ function layoutGroups(r: Reading, layout: Layout, now: number): Groups {
     if (window) limits.push(window.filter(segment => segment.text !== ''))
   }
 
-  return { conversation, limits }
+  return [...conversation, ...limits]
 }
 
 // The record to save when the window crossed a threshold not yet toasted this period, else undefined.
@@ -163,44 +158,35 @@ export const register: Register = on => {
 
     if (r === null) {
       return (
-        <Box>
+        <Box flexDirection="row" justifyContent="flex-end" width="100%">
           <Text dimColor>usage: no data yet</Text>
         </Box>
       )
     }
 
     await read($, minute)
-    const { conversation, limits } = lineGroups(r, e.props.bodyColumns, await $.clock.now())
+    const items = lineItems(r, e.props.bodyColumns, await $.clock.now())
+
     // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
     // and a wrapped piece would make the row jump to two lines. Cut it short instead.
-    const draw = (group: string, items: Item[]) =>
-      items.flatMap((item, i) => [
-        ...(i > 0 ? [<Text dimColor wrap="truncate-end">·</Text>] : []),
-        <Box key={`${group}:${i}`} flexDirection="row">
-          {item.map(({ text, color }) =>
-            color ? (
-              <Text color={color} wrap="truncate-end">
-                {text}
-              </Text>
-            ) : (
-              <Text dimColor wrap="truncate-end">
-                {text}
-              </Text>
-            ),
-          )}
-        </Box>,
-      ])
-
     return (
-      <Box flexDirection="row" justifyContent="space-between" columnGap={GAP} width="100%">
-        <Box flexDirection="row" columnGap={1}>
-          {draw('conversation', conversation)}
-        </Box>
-        {limits.length > 0 && (
-          <Box flexDirection="row" columnGap={1}>
-            {draw('limits', limits)}
-          </Box>
-        )}
+      <Box flexDirection="row" justifyContent="flex-end" columnGap={1} width="100%">
+        {items.flatMap((item, i) => [
+          ...(i > 0 ? [<Text dimColor wrap="truncate-end">·</Text>] : []),
+          <Box key={`item:${i}`} flexDirection="row">
+            {item.map(({ text, color }) =>
+              color ? (
+                <Text color={color} wrap="truncate-end">
+                  {text}
+                </Text>
+              ) : (
+                <Text dimColor wrap="truncate-end">
+                  {text}
+                </Text>
+              ),
+            )}
+          </Box>,
+        ])}
       </Box>
     )
   })

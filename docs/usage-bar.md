@@ -4,28 +4,28 @@ One line above the prompt with the session's context fill and cost, plus the pla
 
 ## Behaviour
 
-1. **Line.** One line above the prompt, this conversation's figures on the left and the account's limits on the right:
+1. **Line.** One line above the prompt, at its right edge, away from where replies are read and prompts typed: this conversation's figures, then the account's limits:
 
    ```
-   context 62% · $1.84                session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
+                   context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
    ```
 
    - `context` (`ctx` in the narrower layouts): how full the context window is, as a whole percent rounded down; `–` while no response has reported it.
    - `$`: what the session has cost so far, in US dollars with two decimals; `$–` where Claude Code keeps no cost record.
    - `session` and `week` (`s` and `w` in the narrower layouts): whole percent used of the session window (`five_hour`) and the weekly window (`seven_day`), rounded down, with the time left until each resets in brackets after `↻`, so it reads as part of its limit: `3d2h` from a day, `2h10m` from an hour, `45m` below, in whole minutes rounded up, a zero part dropped (`4h`, `3d`). Once the reset has passed with no new reading, `now`: the percent shown is the old period's until the next reading. A timer redraws the line every minute, since readings come only with turns and an idle line would go stale. `session` matches claude.ai's "Current session" and doesn't depend on the window's length.
-   - Until the first reading, show `usage: no data yet`, dimmed, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
+   - Until the first reading, show `usage: no data yet`, dimmed and at the right edge too, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
    - Off a subscription (an API key), readings carry no limits: show context and `$` only.
    - Each window's bar has 8 cells, each 12.5%, filled rounded down: `⣿` used, `⣀` left. Braille looks the same in Warp, iTerm2 and the desktop app and stays light; `█`/`░` draws as a dotted texture in iTerm2 and the desktop app.
    - Each window's percent is coloured by the theme from 50%: `warning`, and `error` from 95%, matching the toasts. Everything else, percents below 50% and bars included, is dimmed: full colour on a bar distracts.
    - No part of the line wraps; one that doesn't fit is cut short with `…`. While a desktop window is resized, a frame can draw the layout chosen for the previous width, and a wrapped part would make the row jump to two lines.
-   - The line shows the widest of these layouts whose two groups fit its available width (`bodyColumns`) with at least 2 spaces between them, so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths count the 2-space gap, for the example and at most, with `100%` in both windows, a cost like `$123.45` and the longest countdowns, `4h59m` and `23h59m`. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
+   - The line shows the widest of these layouts that fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example and at most, with `100%` in both windows, a cost like `$123.45` and the longest countdowns, `4h59m` and `23h59m`. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
 
-     | Layout | Left | Right | Length | At most |
-     |---|---|---|---|---|
-     | Full | `context 62% · $1.84` | `session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 80 | 87 |
-     | Short, bars | `ctx 62% · $1.84` | `s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 67 | 74 |
-     | Short | `ctx 62% · $1.84` | `s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 49 | 56 |
-     | Tiny | `ctx 62% · $1.84` | `s 41% · w 18%` | 30 | 35 |
+     | Layout | Line | Length | At most |
+     |---|---|---|---|
+     | Full | `context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 81 | 88 |
+     | Short, bars | `ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 68 | 75 |
+     | Short | `ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 50 | 57 |
+     | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 36 |
 
 2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The time to the reset is on the line, except in the tiny layout, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.
@@ -91,7 +91,7 @@ Use `claude plugin test`. Cover at least:
 6. The line rounds the context and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
 7. The startup reading, limits but no context fill yet, shows `context – · $0.00` and both limits.
 8. Empty `rateLimits` never toast.
-9. Each width shows the widest layout whose groups fit it with a 2-space gap, conversation left and limits right, and the line fits every width the tiny layout fits.
+9. Each width shows the widest layout that fits it, the whole line, `usage: no data yet` included, at the right edge, and the line fits every width the tiny layout fits.
 10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
 11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.
 12. Each reset counts down in days and hours, hours and minutes, or minutes, rounded up, a zero part dropped and `now` once passed, and the countdown moves on each minute without a new reading.

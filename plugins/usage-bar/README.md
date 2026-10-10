@@ -2,14 +2,14 @@
 
 Your plan's usage limits, context and cost on one quiet line above the prompt, with an alert before you run out. It doesn't replace your status line: it sits above the prompt, so the two work side by side.
 
-![The bar above Claude Code's prompt: context 62% · $1.84 on the left, session 41% (↻ 2h10m) · week 18% (↻ 3d2h) on the right](images/normal.png)
+![The bar at the right edge above Claude Code's prompt: context 62% · $1.84 · session 41% (↻ 2h10m) · week 18% (↻ 3d2h)](images/normal.png)
 
-On the left, this conversation:
+The line sits at the right edge, away from where you read and type. First, this conversation:
 
 - `context`: how full the context window is.
 - `$`: what this session has cost.
 
-On the right, your account's limits:
+Then your account's limits:
 
 - `session` and `week`: how much of your 5-hour and weekly limits you've used, and after `↻`, how long until each resets: `2h10m`, `3d2h`, or `now` once it has reset.
 
@@ -28,15 +28,15 @@ When both limits cross at once, one alert names both: `session 62% · week 97%`.
 The line at the top is the full layout. When it doesn't fit, it shortens instead of wrapping, one step at a time:
 
 ```
-ctx 62% · $1.84    s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
+ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)
 ```
 
 ```
-ctx 62% · $1.84    s 41% (↻ 2h10m) · w 18% (↻ 3d2h)
+ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)
 ```
 
 ```
-ctx 62% · $1.84    s 41% · w 18%
+ctx 62% · $1.84 · s 41% · w 18%
 ```
 
 ## Before the first reading
