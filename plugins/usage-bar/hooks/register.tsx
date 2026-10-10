@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, SessionMeasureInput, Timer } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
 
@@ -116,6 +116,22 @@ async function freshRecord($: EngineInterface, limit: LimitReading): Promise<Toa
 const toastText = (limits: { limit: LimitReading; window: Window }[]): string =>
   limits.map(({ limit, window }) => `${window.label} ${Math.floor(limit.percentUsed)}%`).join(' · ')
 
+// The figures session.measure and $.session.usage() both carry, as the line keeps them.
+const toReading = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>): Reading => ({
+  contextPercent: u.context.percent,
+  usd: u.cost?.usd,
+  rateLimits: u.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
+})
+
+// After /clear the new session holds no reading, and none is measured until the next turn ends; the engine
+// still has the last response's limits, so draw those. Null while it has none: before the startup quota check.
+// Drawing can't write state, so the next session.measure is what stores a reading.
+async function engineReading($: EngineInterface): Promise<Reading | null> {
+  const usage = await $.session.usage().catch(() => undefined)
+
+  return usage && usage.rateLimits.length > 0 ? toReading(usage) : null
+}
+
 export const register: Register = on => {
   // One timer per module: session.start can fire again without a reload, and a reload drops the old timer itself.
   let tick: Timer | undefined
@@ -128,11 +144,7 @@ export const register: Register = on => {
   })
 
   on('session.measure', async ($, e, next) => {
-    const r: Reading = {
-      contextPercent: e.context.percent,
-      usd: e.cost?.usd,
-      rateLimits: e.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
-    }
+    const r = toReading(e)
     await update($, reading, () => r)
 
     // One toast per reading: the desktop app shows one toast per plugin at a time and drops the next.
@@ -155,7 +167,7 @@ export const register: Register = on => {
     if (e.props.hasSurvey) return next(e)
 
     // No reading until Claude Code's startup quota check, and none at all while not logged in: say so, so the line doesn't look missing.
-    const r = await read($, reading)
+    const r = (await read($, reading)) ?? (await engineReading($))
     const { Box, Text } = $.ui.resolve(e)
 
     if (r === null) {

@@ -13,7 +13,7 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - `context` (`ctx` in the narrower layouts): how full the context window is, as a whole percent rounded down; `–` while no response has reported it.
    - `$`: what the session has cost so far, in US dollars with two decimals; `$–` where Claude Code keeps no cost record.
    - `session` and `week` (`s` and `w` in the narrower layouts): whole percent used of the session window (`five_hour`) and the weekly window (`seven_day`), rounded down, with the time left until each resets in brackets after `↻`, so it reads as part of its limit: `3d2h` from a day, `2h10m` from an hour, `45m` below, in whole minutes rounded up, a zero part dropped (`4h`, `3d`). Once the reset has passed with no new reading, `now`: the percent shown is the old period's until the next reading. A timer redraws the line every minute, since readings come only with turns and an idle line would go stale. `session` matches claude.ai's "Current session" and doesn't depend on the window's length.
-   - Until the first reading, show `usage: no data yet`, dimmed and at the right edge too, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
+   - Until the first reading, show `usage: no data yet`, dimmed and at the right edge too, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`. After `/clear`, the new session has no reading until its first turn ends, so draw the limits Claude Code still holds from the last response (`$.session.usage()`), with context `–`.
    - Off a subscription (an API key), readings carry no limits: show context and `$` only.
    - Each window's bar has 8 cells, each 12.5%, filled rounded down: `⣿` used, `⣀` left. Braille looks the same in Warp, iTerm2 and the desktop app and stays light; `█`/`░` draws as a dotted texture in iTerm2 and the desktop app.
    - Each window's percent is coloured by the theme from 75%: `warning`, and `error` from 90%, the cutoffs claude.ai's Settings → Usage meters use when the server sends no severity of its own. Everything else, percents below 75% and bars included, is dimmed: full colour on a bar distracts.
@@ -84,7 +84,7 @@ API key, no subscription: not observed. Per the API docs, `rateLimits` stays emp
 
 Use `claude plugin test`. Cover at least:
 
-1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only context and `$`.
+1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only context and `$`. After `/clear`, before any turn, the limits Claude Code still holds.
 2. Crossing 50%, 75% and 90% each toasts once, and exactly 50% counts as crossed.
 3. A jump from 40% to 96% shows one toast, `week 96%`, and no later toast for 50%, 75% or 90%.
 4. Staying above a threshold, reloading, or starting a session in another project does not repeat the toast. Nor does a 0.1.0 record of 80% for a reading of 82%.

@@ -94,6 +94,33 @@ describe('line', () => {
     }
   })
 
+  // /clear starts a session with no reading, while the engine still holds the last response's limits.
+  test('showsTheEnginesLastLimits_afterClearBeforeAnyTurn', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('session.usage', () => ({
+      value: { startedAt: NOW, context: { window: 200_000 }, rateLimits: [week(40)], cost: { usd: 0 } },
+    }))
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('context – · $0.00 · week ⣿⣿⣿⣀⣀⣀⣀⣀ 40% (↻ 3d2h)')
+    }
+  })
+
+  // The engine's limits stand in only for a missing reading; a measured one is what the line shows.
+  test('showsTheStoredReading_overADifferentEngineUsage', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('session.usage', () => ({
+      value: { startedAt: NOW, context: { window: 200_000 }, rateLimits: [week(40)], cost: { usd: 0 } },
+    }))
+    await measure($, [week(70)], 12, 1.5)
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('context 12% · $1.50 · week ⣿⣿⣿⣿⣿⣀⣀⣀ 70% (↻ 3d2h)')
+    }
+  })
+
   // An API-key user, off a subscription, gets readings with no rate limits.
   test('showsOnlyCtxAndCost_whenRateLimitsAreEmpty', async ($, on) => {
     mock.store(on)
