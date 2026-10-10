@@ -94,6 +94,26 @@ describe('line', () => {
     }
   })
 
+  // A survey takes the row above the prompt: the line leaves it to what draws beneath.
+  test('leavesTheRowToTheSurvey_whileOneShows', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('ui.render', ($, e) => h($.ui.resolve(e).Text, null, 'survey'))
+    await measure($, [week(40)])
+
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({
+        plugin: 'usage-bar',
+        surface,
+        ...abovePrompt(),
+        props: { ...abovePrompt().props, hasSurvey: true },
+      })
+      const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+      await ui.unmount()
+      expect(texts).toEqual(['survey'])
+    }
+  })
+
   // /clear starts a session with no reading, while the engine still holds the last response's limits.
   test('showsTheEnginesLastLimits_afterClearBeforeAnyTurn', async ($, on) => {
     mock.store(on)

@@ -66,6 +66,8 @@ In a terminal 11 rows tall or less, Claude Code doesn't show its row above the p
 
 `--continue` (2.1.296, 2026-10-10, tmux): a new process, so the startup reading and its toasts arrive as on a fresh start, within about 1 s. The line shows the resumed conversation's `ctx` and `$` at once, not `ctx –`. A second `--continue` repeats no toast.
 
+`/clear` and `/resume` (2.1.296, 2026-10-10, tmux): each starts a session with no stored reading and no `session.start`, and no `session.measure` until the next turn. The line shows the limits `$.session.usage()` still holds from the last response, with `context –` until the next reply; the minute timer keeps counting down.
+
 A toast's text is one line: a `\n` in it draws as `�` in the terminal.
 
 Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`):
@@ -96,3 +98,13 @@ Use `claude plugin test`. Cover at least:
 10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 75% and `error` at 90%.
 11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.
 12. Each reset counts down in days and hours, hours and minutes, or minutes, rounded up, a zero part dropped and `now` once passed, and the countdown moves on each minute without a new reading.
+13. While a survey shows, the line leaves the row to it.
+
+Then check live what the tests can't reach: Claude Code's own events and a real terminal. Run `claude` in `tmux` with `--debug-file`, with `CLAUDE_CODE_PLUGIN_DIRS` unset unless it names this folder: another copy of the plugin loads in its place. Check that the debug log says `hooks module usage-bar@claude-mods loaded`, then:
+
+1. Startup: `usage: no data yet`, then the limits within about 2 s.
+2. After a reply: `context` shows a percent.
+3. `/clear`, twice in a row, and `/resume`: the limits stay, `context –` until the next reply.
+4. Left for a minute after `/clear`: the countdown moves on.
+5. `tmux resize-window` from 160 columns down to 30: each layout in turn, then cut short with `…`.
+6. A terminal 11 rows tall: the line is hidden; 12 rows: it shows.
