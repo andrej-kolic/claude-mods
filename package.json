@@ -1,8 +1,6 @@
 {
   "name": "claude-mods",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
     "test": "for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin test \"$d\" || exit 1; done",
     "validate": "claude plugin validate . && for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin validate \"$d\" || exit 1; done",

@@ -57,19 +57,13 @@ const session = (percentUsed: number, resetsAt = SESSION_PERIOD): SessionRateLim
 
 async function mountLine($: Engine, surface: (typeof SURFACES)[number], bodyColumns?: number) {
   const ui = await $.ui.mount({ plugin: 'usage-bar', surface, ...abovePrompt(bodyColumns) })
-  // Each group's items are drawn apart with a dot between; ` · ` stands for that, and two spaces, the narrowest gap,
-  // for the space between the conversation's figures on the left and the limits on the right.
+  // Items are drawn apart with a dot between; ` · ` stands for that.
   const boxes = await ui.findAll({ type: 'Box' })
-  const group = (name: string) =>
-    boxes.filter(box => box.key?.startsWith(`${name}:`)).map(box => box.text).join(' · ') || undefined
-  const left = group('conversation')
-  const right = group('limits')
-  // The gaps those stand for are the layout's, not typed spaces: one column either side of each dot, two between groups.
-  if (left !== undefined) {
-    expect(boxes.find(box => box.props.justifyContent === 'space-between')?.props.columnGap).toBe(2)
-    expect(boxes.filter(box => box.props.columnGap === 1)).toHaveLength(right ? 2 : 1)
-  }
-  const line = left === undefined ? boxes[0]?.text : right ? `${left}  ${right}` : left
+  const items = boxes.filter(box => box.key?.startsWith('item:')).map(box => box.text)
+  // The whole line sits at the right edge, and the gap either side of each dot is the layout's, not typed spaces.
+  expect(boxes[0]?.props.justifyContent).toBe('flex-end')
+  if (items.length > 0) expect(boxes[0]?.props.columnGap).toBe(1)
+  const line = items.length > 0 ? items.join(' · ') : boxes[0]?.text
   const texts = await ui.findAll({ type: 'Text' })
   await ui.unmount()
 
@@ -100,6 +94,53 @@ describe('line', () => {
     }
   })
 
+  // A survey takes the row above the prompt: the line leaves it to what draws beneath.
+  test('leavesTheRowToTheSurvey_whileOneShows', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('ui.render', ($, e) => h($.ui.resolve(e).Text, null, 'survey'))
+    await measure($, [week(40)])
+
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({
+        plugin: 'usage-bar',
+        surface,
+        ...abovePrompt(),
+        props: { ...abovePrompt().props, hasSurvey: true },
+      })
+      const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+      await ui.unmount()
+      expect(texts).toEqual(['survey'])
+    }
+  })
+
+  // /clear starts a session with no reading, while the engine still holds the last response's limits.
+  test('showsTheEnginesLastLimits_afterClearBeforeAnyTurn', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('session.usage', () => ({
+      value: { startedAt: NOW, context: { window: 200_000 }, rateLimits: [week(40)], cost: { usd: 0 } },
+    }))
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('context – · $0.00 · week ⣿⣿⣿⣀⣀⣀⣀⣀ 40% (↻ 3d2h)')
+    }
+  })
+
+  // The engine's limits stand in only for a missing reading; a measured one is what the line shows.
+  test('showsTheStoredReading_overADifferentEngineUsage', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    on('session.usage', () => ({
+      value: { startedAt: NOW, context: { window: 200_000 }, rateLimits: [week(40)], cost: { usd: 0 } },
+    }))
+    await measure($, [week(70)], 12, 1.5)
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('context 12% · $1.50 · week ⣿⣿⣿⣿⣿⣀⣀⣀ 70% (↻ 3d2h)')
+    }
+  })
+
   // An API-key user, off a subscription, gets readings with no rate limits.
   test('showsOnlyCtxAndCost_whenRateLimitsAreEmpty', async ($, on) => {
     mock.store(on)
@@ -124,7 +165,7 @@ describe('line', () => {
 
     for (const surface of SURFACES) {
       expect((await lineText($, surface))).toBe(
-        'context – · $0.00  session ⣀⣀⣀⣀⣀⣀⣀⣀ 3% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 21% (↻ 3d2h)',
+        'context – · $0.00 · session ⣀⣀⣀⣀⣀⣀⣀⣀ 3% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 21% (↻ 3d2h)',
       )
     }
   })
@@ -147,7 +188,7 @@ describe('line', () => {
 
     for (const surface of SURFACES) {
       expect((await lineText($, surface))).toBe(
-        'context 62% · $1.80  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+        'context 62% · $1.80 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
       )
     }
   })
@@ -159,10 +200,10 @@ describe('line', () => {
     await measure($, [session(41), week(18)], 62, 1.84)
 
     const layouts = [
-      'context 62% · $1.84  session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s 41% (↻ 2h10m) · w 18% (↻ 3d2h)',
-      'ctx 62% · $1.84  s 41% · w 18%',
+      'context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)',
+      'ctx 62% · $1.84 · s 41% · w 18%',
     ]
     for (const surface of SURFACES) {
       for (const [i, line] of layouts.entries()) {
@@ -215,7 +256,7 @@ describe('line', () => {
     await measure($, [session(10)])
 
     const ui = await $.ui.mount({ plugin: 'usage-bar', surface: 'terminal', ...abovePrompt() })
-    const countdown = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'limits:0')?.text
+    const countdown = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'item:2')?.text
     expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h10m)')
     await clock.advance(60_000)
     expect(await countdown()).toBe('session ⣀⣀⣀⣀⣀⣀⣀⣀ 10% (↻ 2h9m)')
@@ -252,11 +293,11 @@ describe('line', () => {
     }
   })
 
-  test('colorsPercentOnly_warningFrom50AndErrorFrom95', async ($, on) => {
+  test('colorsPercentOnly_warningFrom75AndErrorFrom90', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
 
-    for (const [percent, color] of [[49.9, undefined], [50, 'warning'], [94, 'warning'], [95, 'error']] as const) {
+    for (const [percent, color] of [[74.9, undefined], [75, 'warning'], [89, 'warning'], [90, 'error']] as const) {
       await measure($, [week(percent)])
       for (const surface of SURFACES) {
         expect(await limitColors($, surface, `${Math.floor(percent)}%`)).toEqual({ percent: color, bar: undefined })
@@ -270,11 +311,11 @@ describe('toasts', () => {
     mock.store(on)
     const { toasts } = engineBeneath(on)
 
-    for (const percent of [49.9, 50, 51, 80, 95]) {
+    for (const percent of [49.9, 50, 51, 75, 90]) {
       await measure($, [week(percent)])
     }
 
-    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['50', '80', '95'])
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['50', '75', '90'])
     expect(toasts[0]).toBe('week 50%')
   })
 
@@ -321,6 +362,16 @@ describe('toasts', () => {
     expect(toasts).toEqual([])
   })
 
+  // 0.1.0 alerted at 50, 80 and 95; its records outlive the update until the period resets.
+  test('doesNotRepeat_whenAnOlderVersionStoredAHigherThreshold', async ($, on) => {
+    mock.store(on, { 'toasted:seven_day': { resetsAt: PERIOD, thresholds: [50, 80] } })
+    const { toasts } = engineBeneath(on)
+
+    await measure($, [week(82)])
+
+    expect(toasts).toEqual([])
+  })
+
   test('reArmsAllThresholds_whenResetsAtChanges', async ($, on) => {
     mock.store(on)
     const { toasts } = engineBeneath(on)
@@ -328,9 +379,9 @@ describe('toasts', () => {
     await measure($, [week(96)])
     await measure($, [week(2, NEXT_PERIOD)])
     await measure($, [week(50, NEXT_PERIOD)])
-    await measure($, [week(80, NEXT_PERIOD)])
+    await measure($, [week(75, NEXT_PERIOD)])
 
-    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['96', '50', '80'])
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['96', '50', '75'])
   })
 
   // The desktop app shows one toast per plugin at a time and drops the next, so a second toast from one reading would be lost.
@@ -367,9 +418,9 @@ describe('toasts', () => {
     const { toasts } = engineBeneath(on)
 
     await measure($, [session(50), week(50)])
-    await measure($, [session(80), week(55)])
+    await measure($, [session(75), week(55)])
 
     expect(toasts).toHaveLength(2)
-    expect(toasts[1]).toBe('session 80%')
+    expect(toasts[1]).toBe('session 75%')
   })
 })

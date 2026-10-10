@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, SessionMeasureInput, Timer } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
 
@@ -7,7 +7,8 @@ const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 // Bumped each minute so the countdowns redraw while no reading arrives.
 const minute = atom({ plugin: 'usage-bar', key: 'minute' } as const, 0)
 
-const THRESHOLDS = [50, 80, 95]
+// Alerts at 50%, then claude.ai's own warning (75%) and critical (90%) colours on Settings → Usage.
+const THRESHOLDS = [50, 75, 90]
 
 type Window = { label: string; letter: string }
 
@@ -49,7 +50,7 @@ function bar(percent: number): string {
 }
 
 const levelColor = (percent: number): Segment['color'] =>
-  percent >= 95 ? 'error' : percent >= 50 ? 'warning' : undefined
+  percent >= 90 ? 'error' : percent >= 75 ? 'warning' : undefined
 
 function windowSegments(limit: LimitReading, layout: Layout, now: number): Segment[] | undefined {
   const window = WINDOWS[limit.kind]
@@ -64,29 +65,24 @@ function windowSegments(limit: LimitReading, layout: Layout, now: number): Segme
   return [{ text: `${label} ${barText}` }, { text: percent, color: levelColor(limit.percentUsed) }, { text: resets }]
 }
 
-// The line in two groups of items: this conversation's figures on the left, the account's limits on the right.
+// The line's items at the right edge: this conversation's figures, then the account's limits.
 // Items are drawn apart with a dot between and a one-column gap either side of it, not a typed ` · `: the
 // desktop app's spaces are narrower than a column.
 type Item = Segment[]
-type Groups = { conversation: Item[]; limits: Item[] }
 const SEPARATOR = 3
 
-// The narrowest gap between the groups.
-const GAP = 2
-
-const groupLength = (items: Item[]) =>
+const lineLength = (items: Item[]) =>
   items.reduce((n, item) => n + item.reduce((m, s) => m + s.text.length, 0), 0) +
   Math.max(0, items.length - 1) * SEPARATOR
 
-function lineGroups(r: Reading, columns: number, now: number): Groups {
-  const fits = ({ conversation, limits }: Groups) =>
-    groupLength(conversation) + (limits.length > 0 ? GAP + groupLength(limits) : 0) <= columns
+function lineItems(r: Reading, columns: number, now: number): Item[] {
+  const fits = (items: Item[]) => lineLength(items) <= columns
 
   // The narrowest layout shows even where nothing fits.
-  return LAYOUTS.map(layout => layoutGroups(r, layout, now)).find(fits) ?? layoutGroups(r, 'tiny', now)
+  return LAYOUTS.map(layout => layoutItems(r, layout, now)).find(fits) ?? layoutItems(r, 'tiny', now)
 }
 
-function layoutGroups(r: Reading, layout: Layout, now: number): Groups {
+function layoutItems(r: Reading, layout: Layout, now: number): Item[] {
   // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
   // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`
@@ -99,7 +95,7 @@ function layoutGroups(r: Reading, layout: Layout, now: number): Groups {
     if (window) limits.push(window.filter(segment => segment.text !== ''))
   }
 
-  return { conversation, limits }
+  return [...conversation, ...limits]
 }
 
 // The record to save when the window crossed a threshold not yet toasted this period, else undefined.
@@ -109,8 +105,9 @@ async function freshRecord($: EngineInterface, limit: LimitReading): Promise<Toa
   const stored = (await $.store.get(`toasted:${limit.kind}`)) as Toasted | undefined
   const shown = stored?.resetsAt === period ? stored.thresholds : []
 
+  // A threshold counts as shown when one at least as high was: 0.1.0 stored 80 and 95, not 75 and 90.
   const crossed = THRESHOLDS.filter(t => limit.percentUsed >= t)
-  if (crossed.every(t => shown.includes(t))) return undefined
+  if (crossed.every(t => shown.some(s => s >= t))) return undefined
 
   return { resetsAt: period, thresholds: crossed }
 }
@@ -118,6 +115,22 @@ async function freshRecord($: EngineInterface, limit: LimitReading): Promise<Toa
 // Just the windows and numbers, named as in the line's full layout: `week 97%`, or `session 62% · week 97%`.
 const toastText = (limits: { limit: LimitReading; window: Window }[]): string =>
   limits.map(({ limit, window }) => `${window.label} ${Math.floor(limit.percentUsed)}%`).join(' · ')
+
+// The figures session.measure and $.session.usage() both carry, as the line keeps them.
+const toReading = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>): Reading => ({
+  contextPercent: u.context.percent,
+  usd: u.cost?.usd,
+  rateLimits: u.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
+})
+
+// After /clear the new session holds no reading, and none is measured until the next turn ends; the engine
+// still has the last response's limits, so draw those. Null while it has none: before the startup quota check.
+// Drawing can't write state, so the next session.measure is what stores a reading.
+async function engineReading($: EngineInterface): Promise<Reading | null> {
+  const usage = await $.session.usage().catch(() => undefined)
+
+  return usage && usage.rateLimits.length > 0 ? toReading(usage) : null
+}
 
 export const register: Register = on => {
   // One timer per module: session.start can fire again without a reload, and a reload drops the old timer itself.
@@ -131,11 +144,7 @@ export const register: Register = on => {
   })
 
   on('session.measure', async ($, e, next) => {
-    const r: Reading = {
-      contextPercent: e.context.percent,
-      usd: e.cost?.usd,
-      rateLimits: e.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
-    }
+    const r = toReading(e)
     await update($, reading, () => r)
 
     // One toast per reading: the desktop app shows one toast per plugin at a time and drops the next.
@@ -158,49 +167,40 @@ export const register: Register = on => {
     if (e.props.hasSurvey) return next(e)
 
     // No reading until Claude Code's startup quota check, and none at all while not logged in: say so, so the line doesn't look missing.
-    const r = await read($, reading)
+    const r = (await read($, reading)) ?? (await engineReading($))
     const { Box, Text } = $.ui.resolve(e)
 
     if (r === null) {
       return (
-        <Box>
+        <Box flexDirection="row" justifyContent="flex-end" width="100%">
           <Text dimColor>usage: no data yet</Text>
         </Box>
       )
     }
 
     await read($, minute)
-    const { conversation, limits } = lineGroups(r, e.props.bodyColumns, await $.clock.now())
+    const items = lineItems(r, e.props.bodyColumns, await $.clock.now())
+
     // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
     // and a wrapped piece would make the row jump to two lines. Cut it short instead.
-    const draw = (group: string, items: Item[]) =>
-      items.flatMap((item, i) => [
-        ...(i > 0 ? [<Text dimColor wrap="truncate-end">·</Text>] : []),
-        <Box key={`${group}:${i}`} flexDirection="row">
-          {item.map(({ text, color }) =>
-            color ? (
-              <Text color={color} wrap="truncate-end">
-                {text}
-              </Text>
-            ) : (
-              <Text dimColor wrap="truncate-end">
-                {text}
-              </Text>
-            ),
-          )}
-        </Box>,
-      ])
-
     return (
-      <Box flexDirection="row" justifyContent="space-between" columnGap={GAP} width="100%">
-        <Box flexDirection="row" columnGap={1}>
-          {draw('conversation', conversation)}
-        </Box>
-        {limits.length > 0 && (
-          <Box flexDirection="row" columnGap={1}>
-            {draw('limits', limits)}
-          </Box>
-        )}
+      <Box flexDirection="row" justifyContent="flex-end" columnGap={1} width="100%">
+        {items.flatMap((item, i) => [
+          ...(i > 0 ? [<Text dimColor wrap="truncate-end">·</Text>] : []),
+          <Box key={`item:${i}`} flexDirection="row">
+            {item.map(({ text, color }) =>
+              color ? (
+                <Text color={color} wrap="truncate-end">
+                  {text}
+                </Text>
+              ) : (
+                <Text dimColor wrap="truncate-end">
+                  {text}
+                </Text>
+              ),
+            )}
+          </Box>,
+        ])}
       </Box>
     )
   })
