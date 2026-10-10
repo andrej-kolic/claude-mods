@@ -8,10 +8,12 @@ const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 const THRESHOLDS = [50, 80, 95]
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+type Window = { label: string; letter: string; showsDay: boolean }
+
 // The two windows the line shows; any other kind (a gateway's spend_limit) is ignored.
-const WINDOWS: Record<string, { label: string; letter: string; name: string; showsDay: boolean }> = {
-  five_hour: { label: 'session', letter: 's', name: 'Session', showsDay: false },
-  seven_day: { label: 'week', letter: 'w', name: 'Weekly', showsDay: true },
+const WINDOWS: Record<string, Window> = {
+  five_hour: { label: 'session', letter: 's', showsDay: false },
+  seven_day: { label: 'week', letter: 'w', showsDay: true },
 }
 
 // The line's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-bar.md).
@@ -78,25 +80,22 @@ function lineSegments(r: Reading, columns: number): Segment[] {
   return segments.filter(segment => segment.text !== '')
 }
 
-async function toastCrossings($: EngineInterface, limit: LimitReading): Promise<void> {
-  const window = WINDOWS[limit.kind]
-  if (!window) return
-
-  const key = `toasted:${limit.kind}`
+// The record to save when the window crossed a threshold not yet toasted this period, else undefined.
+// It marks every crossed threshold, so a lower one never toasts later in this period.
+async function freshRecord($: EngineInterface, limit: LimitReading): Promise<Toasted | undefined> {
   const period = limit.resetsAt ?? ''
-  const stored = (await $.store.get(key)) as Toasted | undefined
+  const stored = (await $.store.get(`toasted:${limit.kind}`)) as Toasted | undefined
   const shown = stored?.resetsAt === period ? stored.thresholds : []
 
   const crossed = THRESHOLDS.filter(t => limit.percentUsed >= t)
-  const fresh = crossed.filter(t => !shown.includes(t))
-  if (fresh.length === 0) return
+  if (crossed.every(t => shown.includes(t))) return undefined
 
-  // Mark every crossed threshold before toasting, so a lower one never toasts later in this period.
-  await $.store.set(key, { resetsAt: period, thresholds: crossed } satisfies Toasted)
-
-  const resets = limit.resetsAt ? ` — resets ${resetTime(limit.resetsAt, window.showsDay)}` : ''
-  $.ui.toast(`${window.name} limit ${Math.floor(limit.percentUsed)}% used${resets}`)
+  return { resetsAt: period, thresholds: crossed }
 }
+
+// Just the windows and numbers, named as in the line's full layout: `week 97%`, or `session 62% · week 97%`.
+const toastText = (limits: { limit: LimitReading; window: Window }[]): string =>
+  limits.map(({ limit, window }) => `${window.label} ${Math.floor(limit.percentUsed)}%`).join(' · ')
 
 export const register: Register = on => {
   on('session.measure', async ($, e, next) => {
@@ -107,8 +106,17 @@ export const register: Register = on => {
     }
     await update($, reading, () => r)
 
+    // One toast per reading: the desktop app shows one toast per plugin at a time and drops the next.
+    // Toast before saving the records: a failed save repeats a toast later rather than losing it.
+    const crossed: { limit: LimitReading; window: Window; record: Toasted }[] = []
     for (const limit of r.rateLimits) {
-      await toastCrossings($, limit)
+      const window = WINDOWS[limit.kind]
+      const record = window && (await freshRecord($, limit))
+      if (window && record) crossed.push({ limit, window, record })
+    }
+    if (crossed.length > 0) $.ui.toast(toastText(crossed))
+    for (const { limit, record } of crossed) {
+      await $.store.set(`toasted:${limit.kind}`, record)
     }
 
     return next(e)

@@ -26,10 +26,11 @@ One line above the prompt with the session's context fill and cost, plus the pla
      | 56–75 | `ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00` | 56 |
      | < 56 | `ctx 62% · $1.84 · s 41% · w 18%` | 36 |
 
-2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast, for example `Weekly limit 80% used — resets Mon 09:00`.
+2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The reset time is on the line, except under 56 columns, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.
    - If one reading crosses several thresholds (40% → 96%), show one toast and mark them all as shown.
-   - The toast names the current percent, rounded down like the line: `Weekly limit 96% used`, not `95%`.
+   - If one reading crosses thresholds in both windows, show one toast naming both: `session 62% · week 97%`. It fits one line of the desktop app's toast. The desktop app shows one toast per plugin at a time and drops the next.
+   - The toast names the current percent, rounded down like the line: `week 96%`, not `week 95%`.
    - Each threshold toasts once per window period. After a reset, the window's new `resetsAt` starts a new period.
    - A reload or a new session must not repeat a toast already shown for the same period.
 
@@ -72,7 +73,7 @@ Use `claude plugin test`. Cover at least:
 
 1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only `ctx` and `$`.
 2. Crossing 50%, 80% and 95% each toasts once, and exactly 50% counts as crossed.
-3. A jump from 40% to 96% shows one toast, `Weekly limit 96% used`, and no later toast for 50% or 80%.
+3. A jump from 40% to 96% shows one toast, `week 96%`, and no later toast for 50% or 80%.
 4. Staying above a threshold, reloading, or starting a session in another project does not repeat the toast.
 5. A new `resetsAt` re-arms all thresholds.
 6. The line rounds `ctx` and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
@@ -80,3 +81,4 @@ Use `claude plugin test`. Cover at least:
 8. Empty `rateLimits` never toast.
 9. Each width picks its layout at the 100, 76 and 56 column breakpoints, and the widest line fits its width.
 10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
+11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.

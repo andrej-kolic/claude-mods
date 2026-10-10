@@ -204,8 +204,8 @@ describe('toasts', () => {
       await measure($, [week(percent)])
     }
 
-    expect(toasts.map(t => t.match(/limit (\d+)%/)?.[1])).toEqual(['50', '80', '95'])
-    expect(toasts[0]).toMatch(/^Weekly limit 50% used — resets [A-Z][a-z]{2} \d\d:\d\d$/)
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['50', '80', '95'])
+    expect(toasts[0]).toBe('week 50%')
   })
 
   test('toastsOnlyTheHighest_whenOneReadingCrossesSeveral', async ($, on) => {
@@ -217,7 +217,7 @@ describe('toasts', () => {
     await measure($, [week(97)])
 
     expect(toasts).toHaveLength(1)
-    expect(toasts[0]).toMatch(/^Weekly limit 96% used/)
+    expect(toasts[0]).toBe('week 96%')
   })
 
   // An API-key user, off a subscription, gets readings with no rate limits.
@@ -260,7 +260,36 @@ describe('toasts', () => {
     await measure($, [week(50, NEXT_PERIOD)])
     await measure($, [week(80, NEXT_PERIOD)])
 
-    expect(toasts.map(t => t.match(/limit (\d+)%/)?.[1])).toEqual(['96', '50', '80'])
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['96', '50', '80'])
+  })
+
+  // The desktop app shows one toast per plugin at a time and drops the next, so a second toast from one reading would be lost.
+  test('showsOneToastNamingBoth_whenOneReadingCrossesBothWindows', async ($, on) => {
+    mock.store(on)
+    const toasts = recordToasts(on)
+
+    await measure($, [session(62), week(97)])
+
+    expect(toasts).toHaveLength(1)
+    expect(toasts[0]).toBe('session 62% · week 97%')
+  })
+
+  // A failed save may repeat a toast on the next reading, but never loses one.
+  test('stillToasts_whenSavingAWindowRecordFails', async ($, on) => {
+    // A store in memory whose weekly write fails; mock.store has no way to fail a write.
+    const store = new Map<string, unknown>()
+    on('store.get', ($, e) => ({ value: store.get(e.key) }))
+    on('store.set', ($, e) => {
+      if (e.key === 'toasted:seven_day') throw new Error('disk full')
+      store.set(e.key, e.value)
+
+      return { value: undefined }
+    })
+    const toasts = recordToasts(on)
+
+    await measure($, [session(62), week(97)]).catch(() => undefined)
+
+    expect(toasts).toEqual(['session 62% · week 97%'])
   })
 
   test('tracksSessionAndWeeklyWindowsSeparately', async ($, on) => {
@@ -268,7 +297,9 @@ describe('toasts', () => {
     const toasts = recordToasts(on)
 
     await measure($, [session(50), week(50)])
+    await measure($, [session(80), week(55)])
 
-    expect(toasts.map(t => t.split(' ')[0])).toEqual(['Session', 'Weekly'])
+    expect(toasts).toHaveLength(2)
+    expect(toasts[1]).toBe('session 80%')
   })
 })
