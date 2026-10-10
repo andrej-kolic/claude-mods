@@ -5,3 +5,6 @@ plugins/*/.claude-plugin/types/
 
 # rulesync's fetched copy of the playbook rules; the generated ones are committed
 .rulesync/rules/.curated/
+
+# pnpm dlx can write its package store here
+.pnpm-store/
