@@ -71,7 +71,7 @@ The desktop app's Code tab doesn't offer `/plugin install`: run it once in a ter
 - **Claude Code:** 2.1.275 or later for this one-step install. Tested on 2.1.295 and 2.1.296 in the terminal, and in the desktop app 2.31226.0.
 - **Plan:** usage limits need a Claude subscription. With an API key, the line shows only the context and `$`, and no alerts.
 - **Context cost:** about 0 tokens. It adds nothing to what Claude reads.
-- **Where it shows:** Claude Code's terminal and the desktop app's Code tab. It does nothing on claude.ai or in Cowork.
+- **Where it shows:** Claude Code's terminal and the desktop app's Code tab. The VS Code extension's chat panel doesn't show it yet. It does nothing on claude.ai or in Cowork.
 
 ## More
 
