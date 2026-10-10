@@ -15,9 +15,9 @@ Then your account's limits:
 
 ## Alerts
 
-A limit's percent turns yellow at 50% and red at 95%; the rest of the line stays grey. An alert with the limit and its percent appears at the top right at 50%, 80% and 95%:
+A limit's percent turns yellow at 75% and red at 90%, as on claude.ai's usage page; the rest of the line stays grey. An alert with the limit and its percent appears at the top right at 50%, 75% and 90%:
 
-![The session limit at 55% in yellow, with the alert "session 55%"](images/yellow.png)
+![The session limit at 78% in yellow, with the alert "session 78%"](images/yellow.png)
 
 ![The weekly limit at 96% in red, with the alert "week 96%"](images/red.png)
 

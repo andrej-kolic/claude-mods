@@ -16,7 +16,7 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - Until the first reading, show `usage: no data yet`, dimmed and at the right edge too, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`.
    - Off a subscription (an API key), readings carry no limits: show context and `$` only.
    - Each window's bar has 8 cells, each 12.5%, filled rounded down: `⣿` used, `⣀` left. Braille looks the same in Warp, iTerm2 and the desktop app and stays light; `█`/`░` draws as a dotted texture in iTerm2 and the desktop app.
-   - Each window's percent is coloured by the theme from 50%: `warning`, and `error` from 95%, matching the toasts. Everything else, percents below 50% and bars included, is dimmed: full colour on a bar distracts.
+   - Each window's percent is coloured by the theme from 75%: `warning`, and `error` from 90%, the cutoffs claude.ai's Settings → Usage meters use when the server sends no severity of its own. Everything else, percents below 75% and bars included, is dimmed: full colour on a bar distracts.
    - No part of the line wraps; one that doesn't fit is cut short with `…`. While a desktop window is resized, a frame can draw the layout chosen for the previous width, and a wrapped part would make the row jump to two lines.
    - The line shows the widest of these layouts that fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example and at most, with `100%` in both windows, a cost like `$123.45` and the longest countdowns, `4h59m` and `23h59m`. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
 
@@ -27,13 +27,14 @@ One line above the prompt with the session's context fill and cost, plus the pla
      | Short | `ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 50 | 57 |
      | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 36 |
 
-2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The time to the reset is on the line, except in the tiny layout, where nothing shows it.
+2. **Toasts.** When the session or weekly window first crosses 50%, 75% or 90%, show one toast with just the window and number, named as in the line's full layout: `week 75%`. 50% is an early heads-up; 75% and 90% match the line's colours. The time to the reset is on the line, except in the tiny layout, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.
    - If one reading crosses several thresholds (40% → 96%), show one toast and mark them all as shown.
    - If one reading crosses thresholds in both windows, show one toast naming both: `session 62% · week 97%`. It fits one line of the desktop app's toast. The desktop app shows one toast per plugin at a time and drops the next.
-   - The toast names the current percent, rounded down like the line: `week 96%`, not `week 95%`.
+   - The toast names the current percent, rounded down like the line: `week 96%`, not `week 90%`.
    - Each threshold toasts once per window period. After a reset, the window's new `resetsAt` starts a new period.
    - A reload or a new session must not repeat a toast already shown for the same period.
+   - A threshold counts as shown when one at least as high was shown this period, so a record 0.1.0 saved (it alerted at 80% and 95%) doesn't make 75% or 90% toast again after the update.
 
 ## API pointers
 
@@ -84,14 +85,14 @@ API key, no subscription: not observed. Per the API docs, `rateLimits` stays emp
 Use `claude plugin test`. Cover at least:
 
 1. Before the first reading, the line shows `usage: no data yet`; after one with empty `rateLimits`, only context and `$`.
-2. Crossing 50%, 80% and 95% each toasts once, and exactly 50% counts as crossed.
-3. A jump from 40% to 96% shows one toast, `week 96%`, and no later toast for 50% or 80%.
-4. Staying above a threshold, reloading, or starting a session in another project does not repeat the toast.
+2. Crossing 50%, 75% and 90% each toasts once, and exactly 50% counts as crossed.
+3. A jump from 40% to 96% shows one toast, `week 96%`, and no later toast for 50%, 75% or 90%.
+4. Staying above a threshold, reloading, or starting a session in another project does not repeat the toast. Nor does a 0.1.0 record of 80% for a reading of 82%.
 5. A new `resetsAt` re-arms all thresholds.
 6. The line rounds the context and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
 7. The startup reading, limits but no context fill yet, shows `context – · $0.00` and both limits.
 8. Empty `rateLimits` never toast.
 9. Each width shows the widest layout that fits it, the whole line, `usage: no data yet` included, at the right edge, and the line fits every width the tiny layout fits.
-10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
+10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 75% and `error` at 90%.
 11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.
 12. Each reset counts down in days and hours, hours and minutes, or minutes, rounded up, a zero part dropped and `now` once passed, and the countdown moves on each minute without a new reading.

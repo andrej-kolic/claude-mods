@@ -7,7 +7,8 @@ const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 // Bumped each minute so the countdowns redraw while no reading arrives.
 const minute = atom({ plugin: 'usage-bar', key: 'minute' } as const, 0)
 
-const THRESHOLDS = [50, 80, 95]
+// Alerts at 50%, then claude.ai's own warning (75%) and critical (90%) colours on Settings → Usage.
+const THRESHOLDS = [50, 75, 90]
 
 type Window = { label: string; letter: string }
 
@@ -49,7 +50,7 @@ function bar(percent: number): string {
 }
 
 const levelColor = (percent: number): Segment['color'] =>
-  percent >= 95 ? 'error' : percent >= 50 ? 'warning' : undefined
+  percent >= 90 ? 'error' : percent >= 75 ? 'warning' : undefined
 
 function windowSegments(limit: LimitReading, layout: Layout, now: number): Segment[] | undefined {
   const window = WINDOWS[limit.kind]
@@ -104,8 +105,9 @@ async function freshRecord($: EngineInterface, limit: LimitReading): Promise<Toa
   const stored = (await $.store.get(`toasted:${limit.kind}`)) as Toasted | undefined
   const shown = stored?.resetsAt === period ? stored.thresholds : []
 
+  // A threshold counts as shown when one at least as high was: 0.1.0 stored 80 and 95, not 75 and 90.
   const crossed = THRESHOLDS.filter(t => limit.percentUsed >= t)
-  if (crossed.every(t => shown.includes(t))) return undefined
+  if (crossed.every(t => shown.some(s => s >= t))) return undefined
 
   return { resetsAt: period, thresholds: crossed }
 }

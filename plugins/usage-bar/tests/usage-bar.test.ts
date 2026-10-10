@@ -246,11 +246,11 @@ describe('line', () => {
     }
   })
 
-  test('colorsPercentOnly_warningFrom50AndErrorFrom95', async ($, on) => {
+  test('colorsPercentOnly_warningFrom75AndErrorFrom90', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
 
-    for (const [percent, color] of [[49.9, undefined], [50, 'warning'], [94, 'warning'], [95, 'error']] as const) {
+    for (const [percent, color] of [[74.9, undefined], [75, 'warning'], [89, 'warning'], [90, 'error']] as const) {
       await measure($, [week(percent)])
       for (const surface of SURFACES) {
         expect(await limitColors($, surface, `${Math.floor(percent)}%`)).toEqual({ percent: color, bar: undefined })
@@ -264,11 +264,11 @@ describe('toasts', () => {
     mock.store(on)
     const { toasts } = engineBeneath(on)
 
-    for (const percent of [49.9, 50, 51, 80, 95]) {
+    for (const percent of [49.9, 50, 51, 75, 90]) {
       await measure($, [week(percent)])
     }
 
-    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['50', '80', '95'])
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['50', '75', '90'])
     expect(toasts[0]).toBe('week 50%')
   })
 
@@ -315,6 +315,16 @@ describe('toasts', () => {
     expect(toasts).toEqual([])
   })
 
+  // 0.1.0 alerted at 50, 80 and 95; its records outlive the update until the period resets.
+  test('doesNotRepeat_whenAnOlderVersionStoredAHigherThreshold', async ($, on) => {
+    mock.store(on, { 'toasted:seven_day': { resetsAt: PERIOD, thresholds: [50, 80] } })
+    const { toasts } = engineBeneath(on)
+
+    await measure($, [week(82)])
+
+    expect(toasts).toEqual([])
+  })
+
   test('reArmsAllThresholds_whenResetsAtChanges', async ($, on) => {
     mock.store(on)
     const { toasts } = engineBeneath(on)
@@ -322,9 +332,9 @@ describe('toasts', () => {
     await measure($, [week(96)])
     await measure($, [week(2, NEXT_PERIOD)])
     await measure($, [week(50, NEXT_PERIOD)])
-    await measure($, [week(80, NEXT_PERIOD)])
+    await measure($, [week(75, NEXT_PERIOD)])
 
-    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['96', '50', '80'])
+    expect(toasts.map(t => t.match(/(\d+)%/)?.[1])).toEqual(['96', '50', '75'])
   })
 
   // The desktop app shows one toast per plugin at a time and drops the next, so a second toast from one reading would be lost.
@@ -361,9 +371,9 @@ describe('toasts', () => {
     const { toasts } = engineBeneath(on)
 
     await measure($, [session(50), week(50)])
-    await measure($, [session(80), week(55)])
+    await measure($, [session(75), week(55)])
 
     expect(toasts).toHaveLength(2)
-    expect(toasts[1]).toBe('session 80%')
+    expect(toasts[1]).toBe('session 75%')
   })
 })
