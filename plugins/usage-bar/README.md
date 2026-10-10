@@ -1,4 +1,4 @@
-# usage-bar
+# <img src=".claude-plugin/icon.svg" width="32" alt=""> usage-bar
 
 Your plan's usage limits, context and cost on one quiet line above the prompt, with an alert before you run out. It doesn't replace your status line: it sits above the prompt, so the two work side by side.
 

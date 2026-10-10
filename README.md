@@ -23,9 +23,9 @@ Only mods listed in `.claude-plugin/marketplace.json` can be installed.
 
 ## Mods
 
-| Mod | What it does | Status |
-|---|---|---|
-| `usage-bar` | Usage limits, context and cost above the prompt; keeps your status line | Ready: [spec](docs/usage-bar.md) |
+| | Mod | What it does | Status |
+|---|---|---|---|
+| <img src="plugins/usage-bar/.claude-plugin/icon.svg" width="32" alt=""> | `usage-bar` | Usage limits, context and cost above the prompt; keeps your status line | Ready: [spec](docs/usage-bar.md) |
 
 ## Develop a mod
 
