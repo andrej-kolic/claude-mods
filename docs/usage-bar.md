@@ -61,6 +61,15 @@ Not signed in: the footer shows `Not logged in · Run /login` and the line stays
 
 In a terminal 11 rows tall or less, Claude Code doesn't show its row above the prompt at all, so the line is hidden; at 12 rows it shows.
 
+`--continue` (2.1.296, 2026-10-10, tmux): a new process, so the startup reading and its toasts arrive as on a fresh start, within about 1 s. The line shows the resumed conversation's `ctx` and `$` at once, not `ctx –`. A second `--continue` repeats no toast.
+
+A toast's text is one line: a `\n` in it draws as `�` in the terminal.
+
+Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`):
+
+1. The line draws above the prompt in the theme's colours, and the narrower layouts switch with the window's width. Even a wide window never got the full layout, so the desktop likely reports fewer than 100 `bodyColumns`; unconfirmed.
+2. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
+
 API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only `ctx` and `$` and never toasts.
 
 ## Limits
