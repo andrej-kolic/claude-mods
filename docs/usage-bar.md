@@ -17,16 +17,16 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - Off a subscription (an API key), readings carry no limits: show `ctx` and `$` only.
    - Each window's bar has 8 cells, each 12.5%, filled rounded down.
    - Each window's percent is coloured by the theme: `warning` from 50%, `error` from 95%, matching the toasts. The rest, bars included, is dimmed: full colour on a bar distracts.
-   - The layout follows the line's available width (`bodyColumns`); each width's maximum length assumes `100%` in both windows and a cost like `$123.45`:
+   - The line shows the widest of these layouts whose text fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example, and at most, with `100%` in both windows and a cost like `$123.45`:
 
-     | Width | Line | Max |
-     |---|---|---|
-     | ≥ 100 | `ctx 62% · $1.84 · session ███░░░░░ 41% (resets 15:20) · week █░░░░░░░ 18% (resets Mon 09:00)` | 97 |
-     | 76–99 | `ctx 62% · $1.84 · s ███░░░░░ 41% ↻ 15:20 · w █░░░░░░░ 18% ↻ Mon 09:00` | 74 |
-     | 56–75 | `ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00` | 56 |
-     | < 56 | `ctx 62% · $1.84 · s 41% · w 18%` | 36 |
+     | Layout | Line | Length | At most |
+     |---|---|---|---|
+     | Full | `ctx 62% · $1.84 · session ███░░░░░ 41% (resets 15:20) · week █░░░░░░░ 18% (resets Mon 09:00)` | 92 | 97 |
+     | Short, bars | `ctx 62% · $1.84 · s ███░░░░░ 41% ↻ 15:20 · w █░░░░░░░ 18% ↻ Mon 09:00` | 69 | 74 |
+     | Short | `ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00` | 51 | 56 |
+     | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 36 |
 
-2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The reset time is on the line, except under 56 columns, where nothing shows it.
+2. **Toasts.** When the session or weekly window first crosses 50%, 80% or 95%, show one toast with just the window and number, named as in the line's full layout: `week 80%`. The reset time is on the line, except in the tiny layout, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.
    - If one reading crosses several thresholds (40% → 96%), show one toast and mark them all as shown.
    - If one reading crosses thresholds in both windows, show one toast naming both: `session 62% · week 97%`. It fits one line of the desktop app's toast. The desktop app shows one toast per plugin at a time and drops the next.
@@ -67,7 +67,7 @@ A toast's text is one line: a `\n` in it draws as `�` in the terminal.
 
 Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`):
 
-1. The line draws above the prompt in the theme's colours, and the narrower layouts switch with the window's width. Even a wide window never got the full layout, so the desktop likely reports fewer than 100 `bodyColumns`; unconfirmed.
+1. The line draws above the prompt in the theme's colours, and the layouts switch with the window's width. `bodyColumns` follows the window: 78 narrow, 95 at its widest. A desktop column is a little wider than the font's average character, so a line that fits `bodyColumns` never overflows. Under the old fixed breakpoints (full from 100) a wide window never got the full layout.
 2. A toast shows as `<plugin>: <text>` at the top right. One plugin's toasts show one at a time, and a second raised while the first shows is dropped, not queued: hence one toast per reading.
 
 API key, no subscription: not observed. Per the API docs, `rateLimits` stays empty, so the line shows only `ctx` and `$` and never toasts.
@@ -88,6 +88,6 @@ Use `claude plugin test`. Cover at least:
 6. The line rounds `ctx` and window percents down, and shows `$` with two decimals, or `$–` for a reading with no cost.
 7. The startup reading, limits but no context fill yet, shows `ctx – · $0.00` and both limits.
 8. Empty `rateLimits` never toast.
-9. Each width picks its layout at the 100, 76 and 56 column breakpoints, and the widest line fits its width.
+9. Each width shows the widest layout whose line fits it, and the line fits every width the tiny layout fits.
 10. Bars fill rounded down and stay dimmed; the percent turns `warning` at 50% and `error` at 95%.
 11. A reading that crosses thresholds in both windows shows one toast naming both; each window's thresholds are still tracked on their own.

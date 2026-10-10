@@ -16,14 +16,9 @@ const WINDOWS: Record<string, Window> = {
   seven_day: { label: 'week', letter: 'w', showsDay: true },
 }
 
-// The line's layouts, widest first, each used from its minimum bodyColumns (see docs/usage-bar.md).
+// The line's layouts, widest first: the line uses the first whose text fits bodyColumns (see docs/usage-bar.md).
 type Layout = 'full' | 'short-bars' | 'short' | 'tiny'
-const LAYOUTS: [minColumns: number, layout: Layout][] = [
-  [100, 'full'],
-  [76, 'short-bars'],
-  [56, 'short'],
-  [0, 'tiny'],
-]
+const LAYOUTS: Layout[] = ['full', 'short-bars', 'short', 'tiny']
 
 const BAR_CELLS = 8
 
@@ -65,7 +60,13 @@ function windowSegments(limit: LimitReading, layout: Layout): Segment[] | undefi
 }
 
 function lineSegments(r: Reading, columns: number): Segment[] {
-  const layout = LAYOUTS.find(([min]) => columns >= min)?.[1] ?? 'tiny'
+  const fits = (segments: Segment[]) => segments.reduce((n, s) => n + s.text.length, 0) <= columns
+
+  // The narrowest layout shows even where nothing fits.
+  return LAYOUTS.map(layout => layoutSegments(r, layout)).find(fits) ?? layoutSegments(r, 'tiny')
+}
+
+function layoutSegments(r: Reading, layout: Layout): Segment[] {
   // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
   // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`

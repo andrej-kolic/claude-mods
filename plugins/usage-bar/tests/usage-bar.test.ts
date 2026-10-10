@@ -138,33 +138,33 @@ describe('line', () => {
     }
   })
 
-  test('picksLayoutByWidth_atThe100And76And56ColumnBreakpoints', async ($, on) => {
+  // Masked times are as long as real ones, so each line's length is the width it needs.
+  test('picksTheWidestLayoutThatFits_byTheLinesActualLength', async ($, on) => {
     mock.store(on)
     recordToasts(on)
     await measure($, [session(41), week(18)], 62, 1.84)
 
-    const expected: [number, string][] = [
-      [100, 'ctx 62% · $1.84 · session ███░░░░░ 41% (resets hh:mm) · week █░░░░░░░ 18% (resets Ddd hh:mm)'],
-      [99, 'ctx 62% · $1.84 · s ███░░░░░ 41% ↻ hh:mm · w █░░░░░░░ 18% ↻ Ddd hh:mm'],
-      [76, 'ctx 62% · $1.84 · s ███░░░░░ 41% ↻ hh:mm · w █░░░░░░░ 18% ↻ Ddd hh:mm'],
-      [75, 'ctx 62% · $1.84 · s 41% ↻ hh:mm · w 18% ↻ Ddd hh:mm'],
-      [56, 'ctx 62% · $1.84 · s 41% ↻ hh:mm · w 18% ↻ Ddd hh:mm'],
-      [55, 'ctx 62% · $1.84 · s 41% · w 18%'],
+    const layouts = [
+      'ctx 62% · $1.84 · session ███░░░░░ 41% (resets hh:mm) · week █░░░░░░░ 18% (resets Ddd hh:mm)',
+      'ctx 62% · $1.84 · s ███░░░░░ 41% ↻ hh:mm · w █░░░░░░░ 18% ↻ Ddd hh:mm',
+      'ctx 62% · $1.84 · s 41% ↻ hh:mm · w 18% ↻ Ddd hh:mm',
+      'ctx 62% · $1.84 · s 41% · w 18%',
     ]
     for (const surface of SURFACES) {
-      for (const [columns, line] of expected) {
-        expect(maskTimes(await lineText($, surface, columns))).toBe(line)
+      for (const [i, line] of layouts.entries()) {
+        expect(maskTimes(await lineText($, surface, line.length))).toBe(line)
+        expect(maskTimes(await lineText($, surface, line.length - 1))).toBe(layouts[i + 1] ?? line)
       }
     }
   })
 
-  test('fitsItsWidth_withTheLongestFigures', async ($, on) => {
+  test('fitsItsWidth_downToTheNarrowestLayout', async ($, on) => {
     mock.store(on)
     recordToasts(on)
     await measure($, [session(100), week(100)], 100, 123.45)
 
     for (const surface of SURFACES) {
-      for (const columns of [100, 76, 56]) {
+      for (let columns = 40; columns <= 110; columns++) {
         expect((await lineText($, surface, columns))?.length).toBeLessThanOrEqual(columns)
       }
     }

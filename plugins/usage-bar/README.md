@@ -18,23 +18,17 @@ A limit's percent turns yellow at 50% and red at 95%; the bars stay grey. An ale
 
 When both limits cross at once, one alert names both: `session 62% · week 97%`. Each alert shows once per limit period, even across restarts and projects. When a limit resets, its alerts start over.
 
-## On narrow terminals
+## When the line doesn't fit
 
-The line at the top is the full layout, for 100 columns or more. On narrower terminals it shortens instead of wrapping.
-
-76–99 columns:
+The line at the top is the full layout. When it doesn't fit, it shortens instead of wrapping, one step at a time:
 
 ```
 ctx 62% · $1.84 · s ███░░░░░ 41% ↻ 15:20 · w █░░░░░░░ 18% ↻ Mon 09:00
 ```
 
-56–75 columns:
-
 ```
 ctx 62% · $1.84 · s 41% ↻ 15:20 · w 18% ↻ Mon 09:00
 ```
-
-Under 56 columns:
 
 ```
 ctx 62% · $1.84 · s 41% · w 18%
