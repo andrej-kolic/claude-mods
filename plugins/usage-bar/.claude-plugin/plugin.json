@@ -1,7 +1,7 @@
 {
   "name": "usage-bar",
   "version": "0.1.0",
-  "description": "Bar of usage limits, context window and cost; limit alerts, adaptive width",
+  "description": "Usage limits, context and cost above the prompt; keeps your status line",
   "author": {
     "name": "andrej-kolic"
   },

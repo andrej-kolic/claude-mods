@@ -25,7 +25,7 @@ Only mods listed in `.claude-plugin/marketplace.json` can be installed.
 
 | Mod | What it does | Status |
 |---|---|---|
-| `usage-bar` | Bar of usage limits, context window and cost; limit alerts, adaptive width | Ready: [spec](docs/usage-bar.md) |
+| `usage-bar` | Usage limits, context and cost above the prompt; keeps your status line | Ready: [spec](docs/usage-bar.md) |
 
 ## Develop a mod
 

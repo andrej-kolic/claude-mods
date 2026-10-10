@@ -1,6 +1,6 @@
 # usage-bar
 
-Your plan's usage limits, context and cost on one dimmed line above the prompt, with alerts before you run out.
+Your plan's usage limits, context and cost on one quiet line above the prompt, with an alert before you run out. It doesn't replace your status line: it sits above the prompt, so the two work side by side.
 
 ![The bar above Claude Code's prompt: context 62% · $1.84 on the left, session 41% (↻ 2h10m) · week 18% (↻ 3d2h) on the right](images/normal.png)
 
@@ -53,6 +53,10 @@ The context shows `–` until your first reply, because Claude Code measures the
 
 - **Not a status line.** It sits above the prompt and leaves your status line alone.
 - **Not a usage history.** It shows the current figures and nothing over time.
+
+## Privacy
+
+usage-bar reads only figures Claude Code already has: context fill, session cost and your plan's limits. It sends nothing anywhere and makes no network requests. It stores one small record per limit on your machine, listing the alerts already shown in the current period, so a restart doesn't repeat them.
 
 ## Install
 
