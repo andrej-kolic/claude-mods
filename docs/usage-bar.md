@@ -39,13 +39,14 @@ One line above the prompt with the session's context fill and cost, plus the pla
 
 Checked against Claude Code 2.1.295's mod API. Grep the types file the `plugin-authoring` skill names for these:
 
-1. The `session.measure` event fires after each main-thread turn, and whenever a limit window moves a whole point. Its first firing comes from Claude Code's own quota check at startup, with limit readings but no context fill yet; it never fires while not logged in. See Observed behaviour. Use it for redraws and threshold checks instead of polling.
+1. The `session.measure` event fires after each main-thread turn, and whenever a limit window moves a whole point. Its first firing comes from Claude Code's own quota check at startup, with limit readings but no context fill yet; it never fires while not logged in. See Observed behaviour. Use it for redraws and threshold checks instead of polling; the only timer is the countdowns' (item 6).
    - Its input carries `context` (`percent` once a response reports it), `cost` (`usd`) and `rateLimits`.
    - `rateLimits` is a list of `SessionRateLimit`: `kind` (`five_hour`, `seven_day`), `percentUsed` (0–100), `resetsAt` (ISO 8601). It is empty off a subscription.
 2. Keep the latest reading in `$.state`, which survives a reload within the session. `$.session.usage()` returns the same figures, but nothing redraws the line when they change.
 3. The line is drawn by a `ui.render` hook on `{ component: 'AbovePrompt' }`, Claude Code's row above the prompt. See the skill's `band.tsx` example.
 4. Toasts: `$.ui.toast(text)`.
 5. Remember thresholds already toasted in `$.store`, which persists across sessions: one key per window kind (`toasted:seven_day`), holding the period's `resetsAt` and the thresholds toasted in it. A new `resetsAt` replaces the entry, so the store stays small. The key is user-global, not per project: limits are account-wide, so a session in another project must not repeat the toast. The module's own variables reset on every reload.
+6. Countdowns: `$.clock.every(60_000, fn)` from `session.start`, bumping a `$.state` value the render reads, so the line redraws while idle. `session.start` fires again on each reload, which drops the old timer; cancel the previous one first, in case it fires again otherwise.
 
 ## Observed behaviour
 

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
 
@@ -120,8 +120,12 @@ const toastText = (limits: { limit: LimitReading; window: Window }[]): string =>
   limits.map(({ limit, window }) => `${window.label} ${Math.floor(limit.percentUsed)}%`).join(' · ')
 
 export const register: Register = on => {
+  // One timer per module: session.start can fire again without a reload, and a reload drops the old timer itself.
+  let tick: Timer | undefined
+
   on('session.start', async ($, e, next) => {
-    $.clock.every(60_000, () => void update($, minute, n => n + 1))
+    tick?.cancel()
+    tick = $.clock.every(60_000, () => void update($, minute, n => n + 1))
 
     return next(e)
   })

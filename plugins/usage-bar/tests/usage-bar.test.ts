@@ -222,6 +222,24 @@ describe('line', () => {
     await ui.unmount()
   })
 
+  // session.start can fire again in one module's life; a second timer would redraw the line twice a minute.
+  test('keepsOneTimer_whenSessionStartFiresAgain', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    let ticks = 0
+    on('state.set', ($, e, next) => {
+      if (e.key === 'minute') ticks++
+      return next(e)
+    })
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+    await clock.advance(60_000)
+
+    expect(ticks).toBe(1)
+  })
+
   test('fillsBarRoundedDown_soItNeverLooksFullerThanItIs', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
