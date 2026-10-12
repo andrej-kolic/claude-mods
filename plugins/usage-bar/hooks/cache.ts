@@ -106,7 +106,7 @@ function parseRow(line: string): Row | undefined {
 const LENGTH_MS = { '5m': 5 * 60_000, '1h': 60 * 60_000 } as const
 
 // What the check reads: the user's settings (warnCold, coldTokens), whether a turn runs, the last request,
-// a resume's verdict, the cache length, and the time now.
+// a resume's verdict, the cache length and whether the conversation file gave it, and the time now.
 export type ColdInputs = {
   warnCold: boolean
   coldTokens: number
@@ -114,15 +114,17 @@ export type ColdInputs = {
   lastRequest: LastRequest | null
   resumed: Resumed | null
   cacheLength: CacheLength
+  lengthFromFile: boolean
   now: number
 }
 
 // Cold: the next message re-reads the whole context at the cache-write price (plan step 5).
-// Right after a resume, Claude Code's own verdict counts: it knows the length the cache was written with.
+// Right after a resume, Claude Code's own verdict counts only when the file gave no length: it goes by the last
+// reply's split alone, and by its rules when that reply only read the cache (A18).
 export function isCold(i: ColdInputs): boolean {
   if (!i.warnCold || i.working || i.cacheLength === 'off' || i.lastRequest === null) return false
   if (i.lastRequest.tokens < i.coldTokens) return false
-  if (i.resumed?.cacheLikelyExpired) return true
+  if (i.resumed?.cacheLikelyExpired && !i.lengthFromFile) return true
 
   return i.now - i.lastRequest.at > LENGTH_MS[i.cacheLength]
 }

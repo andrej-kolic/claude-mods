@@ -841,6 +841,7 @@ const coldInputs = (over: Partial<ColdInputs> = {}): ColdInputs => ({
   lastRequest: { at: at('13:10'), tokens: 150_000 },
   resumed: null,
   cacheLength: '1h',
+  lengthFromFile: false,
   now: at('14:20'),
   ...over,
 })
@@ -879,10 +880,18 @@ describe('cold check', () => {
     expect(isCold(coldInputs({ lastRequest: null }))).toBe(false)
   })
 
-  // Claude Code knows the length the cache was written with; the plugin's own rule may not, right after a resume.
-  test('takesClaudeCodesVerdict_rightAfterAResume', () => {
+  // With no length from the file, Claude Code's verdict counts right after a resume.
+  test('takesClaudeCodesVerdict_rightAfterAResume_whenTheFileGaveNoLength', () => {
     const resumed = { cacheLikelyExpired: true }
     expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:13'), tokens: 150_000 } }))).toBe(true)
+  })
+
+  // Claude Code judges by the last reply's split alone, or its rules when that is empty; the file's older write knows.
+  test('goesByTheFileLength_overClaudeCodesVerdict_rightAfterAResume', () => {
+    const resumed = { cacheLikelyExpired: true }
+    const inputs = { resumed, lengthFromFile: true, lastRequest: { at: at('14:00'), tokens: 150_000 } }
+    expect(isCold(coldInputs(inputs))).toBe(false)
+    expect(isCold(coldInputs({ ...inputs, now: at('15:01') }))).toBe(true)
   })
 
   test('turnsColdByTime_afterAResumeWhoseCacheWasStillWarm', () => {
@@ -1156,6 +1165,20 @@ describe('cache length from the conversation file', () => {
     await fileReplyThenIdle($, clock, [], 6)
 
     expect(await lineText($, 'terminal')).not.toContain('cold')
+  })
+
+  // Resumed 20 minutes after a reply that only read the cache, on an API key: Claude Code's verdict goes by the
+  // 5-minute rule, the file's older write says 1 hour (review of 2026-10-12).
+  test('staysWarmAfterAResume_whenTheLastReplyOnlyReadAOneHourCache_withoutLimitWindows', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    engineUsage(on, { percent: 75, usd: 3.2 })
+    fileBeneath(on, [row(15_798, 0), row(0, 0)])
+
+    await resumeFile($, 20 * 60, true)
+
+    expect(await lineText($, 'terminal')).toBe('context 75% · $3.20')
   })
 
   // Reading the file's last bytes starts mid-row; that row is no reason to give up on the rest.

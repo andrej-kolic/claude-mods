@@ -199,12 +199,15 @@ type ColdSettings = { warnCold: boolean; coldTokens: number }
 
 // Whether the cache is cold now, from the plugin's state and the engine; read where the line needs it.
 async function coldNow($: EngineInterface, coldSettings: ColdSettings): Promise<boolean> {
+  const inputs = await cacheInputs($)
+
   return isCold({
     ...coldSettings,
     working: await read($, working),
     lastRequest: await read($, lastRequest),
     resumed: await read($, resumed),
-    cacheLength: cacheLength(await cacheInputs($)),
+    cacheLength: cacheLength(inputs),
+    lengthFromFile: inputs.written !== null,
     now: await $.clock.now(),
   })
 }
