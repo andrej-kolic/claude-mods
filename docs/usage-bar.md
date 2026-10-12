@@ -84,7 +84,7 @@ In a terminal 11 rows tall or less, Claude Code doesn't show its row above the p
 
 A toast's text is one line: a `\n` in it draws as `�` in the terminal.
 
-Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`):
+Desktop app (2.31226.0, 2026-10-10, a local Code tab session with `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`). The app loads an installed copy of the plugin in place of that folder, so turn the installed one off in `enabledPlugins` (checked 2026-10-12 on 2.31226.1):
 
 1. The line draws above the prompt in the theme's colours, and the layouts switch with the window's width. `bodyColumns` follows the window: 78 narrow, 95 at its widest. A desktop column is a little wider than the font's average character, so a line that fits `bodyColumns` never overflows. Under the old fixed breakpoints (full from 100) a wide window never got the full layout.
 2. While the window is resized, a frame can briefly draw the layout chosen for the previous width; parts that wrapped made the row jump to two lines, hence no wrapping.
