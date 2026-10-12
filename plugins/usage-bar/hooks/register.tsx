@@ -231,11 +231,7 @@ export const register: Register = on => {
       const { seconds_since_last_response: gapSeconds, context_tokens: tokens } = e
       const at = (await $.clock.now()) - gapSeconds * 1000
       await update($, lastRequest, () => ({ at, tokens }))
-      await update($, resumed, () => ({
-        cacheLikelyExpired: e.prompt_cache_likely_expired ?? false,
-        gapSeconds,
-        cacheWriteUsd: e.estimated_cache_write_usd,
-      }))
+      await update($, resumed, () => ({ cacheLikelyExpired: e.prompt_cache_likely_expired ?? false }))
     }
 
     return next(e)

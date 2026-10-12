@@ -640,7 +640,7 @@ describe('session changes', () => {
       await resume($, source)
 
       expect(state.lastRequest).toEqual({ at: NOW - 461_000, tokens: 38_863 })
-      expect(state.resumed).toEqual({ cacheLikelyExpired: true, gapSeconds: 461, cacheWriteUsd: 0.3109 })
+      expect(state.resumed).toEqual({ cacheLikelyExpired: true })
     }
   })
 
@@ -683,7 +683,7 @@ describe('session changes', () => {
     expect('lastRequest' in state).toBe(false)
   })
 
-  // 400k tokens compacted to a 30k summary: a warning about re-reading 400k, or its price, would be wrong.
+  // 400k tokens compacted to a 30k summary: a warning about re-reading 400k would be wrong.
   test('forgetsTheSizeAndResumeVerdict_afterAManualOrAutoCompaction', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
@@ -711,7 +711,7 @@ describe('session changes', () => {
     await compact($, 'manual')
 
     expect(state.lastRequest).toEqual({ at: NOW - 461_000, tokens: 38_863 })
-    expect(state.resumed).toEqual({ cacheLikelyExpired: true, gapSeconds: 461, cacheWriteUsd: 0.3109 })
+    expect(state.resumed).toEqual({ cacheLikelyExpired: true })
   })
 })
 
@@ -858,12 +858,12 @@ describe('cold check', () => {
 
   // Claude Code knows the length the cache was written with; the plugin's own rule may not, right after a resume.
   test('takesClaudeCodesVerdict_rightAfterAResume', () => {
-    const resumed = { cacheLikelyExpired: true, gapSeconds: 400, cacheWriteUsd: 0.54 }
+    const resumed = { cacheLikelyExpired: true }
     expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:13'), tokens: 150_000 } }))).toBe(true)
   })
 
   test('turnsColdByTime_afterAResumeWhoseCacheWasStillWarm', () => {
-    const resumed = { cacheLikelyExpired: false, gapSeconds: 600, cacheWriteUsd: 0.54 }
+    const resumed = { cacheLikelyExpired: false }
     expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:10'), tokens: 150_000 } }))).toBe(false)
     expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:10'), tokens: 150_000 }, now: at('15:11') }))).toBe(true)
   })
