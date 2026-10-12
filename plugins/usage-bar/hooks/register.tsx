@@ -172,15 +172,13 @@ async function cacheInputs($: EngineInterface): Promise<CacheInputs> {
   }
 }
 
-// The cache warning's settings until /config offers them (plan step 8).
-const WARN_COLD = true
-const COLD_TOKENS = 100_000
+// The cache warning's /config settings (plugin.json userConfig), defaults filled in by the engine.
+type ColdSettings = { warnCold: boolean; coldTokens: number }
 
-// Whether the cache is cold now, from the plugin's state and the engine; read where the line or a toast needs it.
-async function coldNow($: EngineInterface): Promise<boolean> {
+// Whether the cache is cold now, from the plugin's state and the engine; read where the line needs it.
+async function coldNow($: EngineInterface, coldSettings: ColdSettings): Promise<boolean> {
   return isCold({
-    warnCold: WARN_COLD,
-    coldTokens: COLD_TOKENS,
+    ...coldSettings,
     working: await read($, working),
     lastRequest: await read($, lastRequest),
     resumed: await read($, resumed),
@@ -189,7 +187,9 @@ async function coldNow($: EngineInterface): Promise<boolean> {
   })
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const coldSettings: ColdSettings = { warnCold: options.warnCold === true, coldTokens: Number(options.coldTokens) }
+
   // One timer per module: session.start can fire again without a reload, and a reload drops the old timer itself.
   let tick: Timer | undefined
 
@@ -297,7 +297,7 @@ export const register: Register = on => {
     }
 
     await read($, minute)
-    const items = lineItems(r, e.props.bodyColumns, await $.clock.now(), await coldNow($))
+    const items = lineItems(r, e.props.bodyColumns, await $.clock.now(), await coldNow($, coldSettings))
 
     // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
     // and a wrapped piece would make the row jump to two lines. Cut it short instead.

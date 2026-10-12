@@ -976,4 +976,32 @@ describe('cold line', () => {
 
     expect(await lineText($, 'terminal')).not.toContain('cold')
   })
+
+  test('showsNoColdItem_whenWarnColdIsOffInConfig', { options: { warnCold: false } }, async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    expect(await lineText($, 'terminal')).not.toContain('cold')
+  })
+
+  // The default 100k leaves a 60k conversation alone; a lower coldTokens in /config warns about it.
+  test('warnsAboutASmallerConversation_whenColdTokensIsLowered', { options: { coldTokens: 50_000 } }, async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 60_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    expect(await lineText($, 'terminal')).toContain('cache cold')
+  })
+
+  test('leavesASmallerConversationAlone_withTheDefaultColdTokens', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 60_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    expect(await lineText($, 'terminal')).not.toContain('cold')
+  })
 })

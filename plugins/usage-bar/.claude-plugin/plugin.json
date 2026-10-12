@@ -10,5 +10,20 @@
   "supportUrl": "https://github.com/andrej-kolic/claude-mods/issues",
   "privacyPolicyUrl": "https://github.com/andrej-kolic/claude-mods/tree/main/plugins/usage-bar#privacy",
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "warnCold": {
+      "type": "boolean",
+      "title": "Show cache cold",
+      "description": "Show a red \"cache cold\" on the line once the prompt cache has expired, so you know your next message re-reads the whole conversation at full price.",
+      "default": true
+    },
+    "coldTokens": {
+      "type": "number",
+      "title": "Cache cold from (tokens)",
+      "description": "Show \"cache cold\" only when the conversation has at least this many tokens; below it, re-reading costs little.",
+      "default": 100000,
+      "min": 1000
+    }
+  }
 }
