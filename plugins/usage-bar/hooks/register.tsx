@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionMeasureInput, Timer } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
-import { cacheLength, isCold, type CacheInputs } from './cache'
+import { cacheLength, isCold, writtenLength, type CacheInputs } from './cache'
 
 const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 // Bumped each minute so the countdowns redraw while no reading arrives.
@@ -13,6 +13,9 @@ const cacheSeen = atom({ plugin: 'usage-bar', key: 'cacheSeen' } as const, null)
 // True while a main-conversation turn runs: the cache is being used, so it is never cold then.
 const working = atom({ plugin: 'usage-bar', key: 'working' } as const, false)
 const resumed = atom({ plugin: 'usage-bar', key: 'resumed' } as const, null)
+// This session's conversation file, as classic.SessionStart names it, and the cache length its latest write used.
+const transcript = atom({ plugin: 'usage-bar', key: 'transcript' } as const, null)
+const written = atom({ plugin: 'usage-bar', key: 'written' } as const, null)
 
 // Alerts at 50%, then claude.ai's own warning (75%) and critical (90%) colours on Settings → Usage.
 const THRESHOLDS = [50, 75, 90]
@@ -138,13 +141,31 @@ const toReading = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost
   rateLimits: u.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
 })
 
-// After /clear the new session holds no reading, and none is measured until the next turn ends; the engine
-// still has the last response's limits, so draw those. Null while it has none: before the startup quota check.
-// Drawing can't write state, so the next session.measure is what stores a reading.
+// After /clear, /resume or /branch the new session holds no reading, and none is measured until the next turn
+// ends; the engine still has the last response's limits, or the resumed conversation's context and cost, so draw
+// those. Null while it has none: before the startup quota check. Drawing can't write state, so the next
+// session.measure is what stores a reading.
 async function engineReading($: EngineInterface): Promise<Reading | null> {
   const usage = await $.session.usage().catch(() => undefined)
+  const has = usage && (usage.rateLimits.length > 0 || usage.context.percent !== undefined || usage.cost !== undefined)
 
-  return usage && usage.rateLimits.length > 0 ? toReading(usage) : null
+  return has ? toReading(usage) : null
+}
+
+// The last 256 KiB of the conversation file hold the latest reply's row (A18). A failed or empty read, or a tail
+// with no cache write, keeps the last known length.
+const TAIL_BYTES = '262144'
+
+async function readWritten($: EngineInterface): Promise<void> {
+  try {
+    const path = await read($, transcript)
+    if (path === null) return
+    const { exitCode, stdout } = await $.process.run(['tail', '-c', TAIL_BYTES, path])
+    const length = exitCode === 0 ? writtenLength(stdout) : undefined
+    if (length !== undefined) await update($, written, () => length)
+  } catch {
+    // No file, no tail, no process access: the rules decide.
+  }
 }
 
 // Read each time the check runs: the limits change, and arrive only with the first reading (A3.5).
@@ -169,6 +190,7 @@ async function cacheInputs($: EngineInterface): Promise<CacheInputs> {
     model: await $.session.model(),
     rateLimits: r?.rateLimits ?? [],
     cacheSeen: await read($, cacheSeen),
+    written: await read($, written),
   }
 }
 
@@ -221,8 +243,11 @@ export const register: Register = (on, options) => {
   })
 
   // $.state starts empty after /clear, /resume and /branch, and no request has told the plugin anything yet.
-  // A resume or fork reports the transcript's last response, so the bar knows the pause before the first message.
+  // A resume or fork reports the transcript's last response, so the bar knows the pause before the first message,
+  // and the file already holds that response's row.
   on('classic.SessionStart', async ($, e, next) => {
+    const path = e.transcript_path
+    if (path) await update($, transcript, () => path)
     if (e.source === 'clear') {
       await update($, lastRequest, () => null)
       await update($, resumed, () => null)
@@ -233,6 +258,7 @@ export const register: Register = (on, options) => {
       await update($, lastRequest, () => ({ at, tokens }))
       await update($, resumed, () => ({ cacheLikelyExpired: e.prompt_cache_likely_expired ?? false }))
     }
+    if (e.source === 'resume' || e.source === 'fork') await readWritten($)
 
     return next(e)
   })
@@ -257,9 +283,13 @@ export const register: Register = (on, options) => {
   })
 
   // Every way a turn ends completes it: answered, interrupted, refused or failed. A subagent's run completes
-  // with its agentId while the main turn still runs; it raises no turn.start.
+  // with its agentId while the main turn still runs; it raises no turn.start, and writes a file of its own.
+  // The reply's row lands in the file 300–600 ms after the request returns (A18), so read it a second later.
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId === undefined) await update($, working, () => false)
+    if (e.agentId === undefined) {
+      await update($, working, () => false)
+      $.clock.after(1_000, () => void readWritten($))
+    }
 
     return next(e)
   })

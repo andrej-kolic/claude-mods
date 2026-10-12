@@ -17,8 +17,11 @@ export type Resumed = { cacheLikelyExpired: boolean }
 // whether the request read or wrote the prompt cache.
 export type CacheSeen = { model: string; cached: boolean }
 
+// The length the main conversation's latest reply with a cache write wrote it with, from the conversation file (A18).
+export type CacheWritten = '5m' | '1h'
+
 declare module 'claude-code' {
   interface PluginState {
-    'usage-bar': { reading: Reading | null; minute: number; lastRequest: LastRequest | null; cacheSeen: CacheSeen | null; working: boolean; resumed: Resumed | null }
+    'usage-bar': { reading: Reading | null; minute: number; lastRequest: LastRequest | null; cacheSeen: CacheSeen | null; working: boolean; resumed: Resumed | null; transcript: string | null; written: CacheWritten | null }
   }
 }

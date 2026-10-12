@@ -7,6 +7,7 @@ Your plan's usage limits, context and cost on one quiet line above the prompt, w
 The line sits at the right edge, away from where you read and type. First, this conversation:
 
 - `context`: how full the context window is.
+- `cache cold`, in red, after a break: the conversation is no longer cached, so your next message re-reads all of it at full price. It shows only for conversations of 100,000 tokens or more. Turn it off, or change that size, in `/config`.
 - `$`: what this session has cost.
 
 Then your account's limits:
@@ -58,7 +59,7 @@ In the desktop app, a new session and `/clear` show no line at all until you sen
 
 ## Privacy
 
-usage-bar reads only figures Claude Code already has: context fill, session cost and your plan's limits. It sends nothing anywhere and makes no network requests. It stores one small record per limit on your machine, listing the alerts already shown in the current period, so a restart doesn't repeat them.
+usage-bar reads only figures Claude Code already has: context fill, session cost and your plan's limits. It sends nothing anywhere and makes no network requests. It stores one small record per limit on your machine, listing the alerts already shown in the current period, so a restart doesn't repeat them. To learn how long the cache lasts, it reads the end of this conversation's file on your machine after each reply and keeps only `5m` or `1h`.
 
 ## Install
 
@@ -74,6 +75,7 @@ The desktop app's Code tab doesn't offer `/plugin install`: run it once in a ter
 - **Plan:** usage limits need a Claude subscription. With an API key, the line shows only the context and `$`, and no alerts.
 - **Context cost:** about 0 tokens. It adds nothing to what Claude reads.
 - **Where it shows:** Claude Code's terminal and the desktop app's Code tab. The VS Code extension's chat panel doesn't show it yet. It does nothing on claude.ai or in Cowork.
+- **Windows:** tested on macOS only. In Windows 10's older console window, the bars and symbols show as empty boxes; in Windows Terminal and the desktop app they show correctly. On Windows, `cache cold` can show too early after `/resume` when you use an API key.
 
 ## More
 
