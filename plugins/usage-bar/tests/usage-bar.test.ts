@@ -100,6 +100,16 @@ describe('line', () => {
     }
   })
 
+  // The CLI always keeps a cost ledger, so before the startup quota check the engine holds only `$0.00`.
+  test('showsNoDataPlaceholder_whenTheEngineHoldsOnlyTheZeroCostLedger', async ($, on) => {
+    mock.store(on)
+    engineUsage(on, { usd: 0 })
+
+    for (const surface of SURFACES) {
+      expect(await lineText($, surface)).toBe('usage: no data yet')
+    }
+  })
+
   // A survey takes the row above the prompt: the line leaves it to what draws beneath.
   test('leavesTheRowToTheSurvey_whileOneShows', async ($, on) => {
     mock.store(on)
@@ -1281,7 +1291,7 @@ describe('cache length from the conversation file', () => {
     }
   })
 
-  test('showsNoDataPlaceholder_afterAResume_whenTheEngineHasNoContextNorCost', async ($, on) => {
+  test('showsNoDataPlaceholder_afterAResume_whenTheEngineHasNoContextNorLimits', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
     sessionEventsBeneath(on)

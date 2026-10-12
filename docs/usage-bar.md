@@ -117,7 +117,7 @@ Use `claude plugin test`. Cover at least:
 12. Each reset counts down in days and hours, hours and minutes, or minutes, rounded up, a zero part dropped and `now` once passed, and the countdown moves on each minute without a new reading.
 13. While a survey shows, the line leaves the row to it.
 14. The cache length comes from the conversation file's newest row that wrote the cache, over the rules. The file is read at once on resume or fork and 1 s after a main turn, never after a subagent's. Rows that only read the cache, or that the read cut in half, are skipped. A failed read keeps the last length.
-15. After `/resume` with no limits, the line shows context, `$` and, once due, `cache cold`; with neither context nor cost, `usage: no data yet`.
+15. After `/resume` with no limits, the line shows context, `$` and, once due, `cache cold`; with no context, `usage: no data yet`, since a cost alone (the CLI always has one) is no reading.
 
 Then check live what the tests can't reach: Claude Code's own events and a real terminal. Run `claude` in `tmux` with `--debug-file`, with `CLAUDE_CODE_PLUGIN_DIRS` unset unless it names this folder: another copy of the plugin loads in its place. Check that the debug log says `hooks module usage-bar@claude-mods loaded`, then:
 

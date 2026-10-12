@@ -143,11 +143,11 @@ const toReading = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost
 
 // After /clear, /resume or /branch the new session holds no reading, and none is measured until the next turn
 // ends; the engine still has the last response's limits, or the resumed conversation's context and cost, so draw
-// those. Null while it has none: before the startup quota check. Drawing can't write state, so the next
-// session.measure is what stores a reading.
+// those. Null while it has none: before the startup quota check. The CLI's cost ledger is always there, so a cost
+// alone is no reading. Drawing can't write state, so the next session.measure is what stores a reading.
 async function engineReading($: EngineInterface): Promise<Reading | null> {
   const usage = await $.session.usage().catch(() => undefined)
-  const has = usage && (usage.rateLimits.length > 0 || usage.context.percent !== undefined || usage.cost !== undefined)
+  const has = usage && (usage.rateLimits.length > 0 || usage.context.percent !== undefined)
 
   return has ? toReading(usage) : null
 }
