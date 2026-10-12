@@ -11,6 +11,7 @@ One line above the prompt with the session's context fill and cost, plus the pla
    ```
 
    - `context` (`ctx` in the narrower layouts): how full the context window is, as a whole percent rounded down; `–` while no response has reported it.
+   - `cache cold` (`cold` in the short layouts, `❆` in the tiny one), in the theme's `error` colour, its own item right after `context`: the prompt cache has expired, so the next message re-reads the whole context at the cache-write price. It shows when the last reply carried at least 100,000 tokens and is older than the cache length (1 hour on a subscription within its included usage, 5 minutes otherwise, or what `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL` or the `promptCacheTtl` setting says), never while a reply runs or with caching off. Right after a resume, Claude Code's own verdict decides. The minute timer turns it on without a new reading. `❆` (U+2746) is not an emoji and takes one column; `❄` can draw two wide.
    - `$`: what the session has cost so far, in US dollars with two decimals; `$–` where Claude Code keeps no cost record.
    - `session` and `week` (`s` and `w` in the narrower layouts): whole percent used of the session window (`five_hour`) and the weekly window (`seven_day`), rounded down, with the time left until each resets in brackets after `↻`, so it reads as part of its limit: `3d2h` from a day, `2h10m` from an hour, `45m` below, in whole minutes rounded up, a zero part dropped (`4h`, `3d`). Once the reset has passed with no new reading, `now`: the percent shown is the old period's until the next reading. A timer redraws the line every minute, since readings come only with turns and an idle line would go stale. `session` matches claude.ai's "Current session" and doesn't depend on the window's length.
    - Until the first reading, show `usage: no data yet`, dimmed and at the right edge too, so the line doesn't look missing. Not logged in, no reading comes, so it stays until `/login`. After `/clear`, the new session has no reading until its first turn ends, so draw the limits Claude Code still holds from the last response (`$.session.usage()`), with context `–`.
@@ -18,14 +19,14 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - Each window's bar has 8 cells, each 12.5%, filled rounded down: `⣿` used, `⣀` left. Braille looks the same in Warp, iTerm2 and the desktop app and stays light; `█`/`░` draws as a dotted texture in iTerm2 and the desktop app.
    - Each window's percent is coloured by the theme from 75%: `warning`, and `error` from 90%, the cutoffs claude.ai's Settings → Usage meters use when the server sends no severity of its own. Everything else, percents below 75% and bars included, is dimmed: full colour on a bar distracts.
    - No part of the line wraps; one that doesn't fit is cut short with `…`. While a desktop window is resized, a frame can draw the layout chosen for the previous width, and a wrapped part would make the row jump to two lines.
-   - The line shows the widest of these layouts that fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example and at most, with `100%` in both windows, a cost like `$123.45` and the longest countdowns, `4h59m` and `23h59m`. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
+   - The line shows the widest of these layouts that fits its available width (`bodyColumns`), so it shortens only when the actual figures don't fit. The narrowest shows even where it doesn't fit. Lengths are for the example and at most, with `100%` in both windows, a cost like `$123.45`, the longest countdowns, `4h59m` and `23h59m`, and the cold item. Each ` · ` is a dot drawn with a one-column gap either side, not typed spaces, because the desktop app's spaces are narrower than a column; it counts as 3 columns:
 
      | Layout | Line | Length | At most |
      |---|---|---|---|
-     | Full | `context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 81 | 88 |
-     | Short, bars | `ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 68 | 75 |
-     | Short | `ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 50 | 57 |
-     | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 36 |
+     | Full | `context 62% · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 81 | 101 |
+     | Short, bars | `ctx 62% · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 2h10m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d2h)` | 68 | 82 |
+     | Short | `ctx 62% · $1.84 · s 41% (↻ 2h10m) · w 18% (↻ 3d2h)` | 50 | 64 |
+     | Tiny | `ctx 62% · $1.84 · s 41% · w 18%` | 31 | 40 |
 
 2. **Toasts.** When the session or weekly window first crosses 50%, 75% or 90%, show one toast with just the window and number, named as in the line's full layout: `week 75%`. 50% is an early heads-up; 75% and 90% match the line's colours. The time to the reset is on the line, except in the tiny layout, where nothing shows it.
    - A window has crossed a threshold when `percentUsed` is greater than or equal to it, so exactly 50 counts.

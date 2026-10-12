@@ -1,6 +1,8 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
-import type { On, SessionRateLimit } from 'claude-code'
+import type { On, RenderElement, SessionMessage, SessionRateLimit } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
+
+import { cacheLength, isCold, type CacheInputs, type ColdInputs } from '../hooks/cache'
 
 const abovePrompt = (bodyColumns = 120) =>
   ({
@@ -30,7 +32,7 @@ const week = (percentUsed: number, resetsAt = PERIOD): SessionRateLimit => ({
 })
 
 // Stands for the engine beneath the plugin: records toasts, answers session.measure, and runs a clock from NOW.
-function engineBeneath(on: On): { toasts: string[]; clock: MockClock } {
+function engineBeneath(on: On, env: Record<string, string> = {}): { toasts: string[]; clock: MockClock } {
   const clock = mock.clock(on, { now: NOW })
   const toasts: string[] = []
   on('ui.toast', ($, e) => {
@@ -40,6 +42,10 @@ function engineBeneath(on: On): { toasts: string[]; clock: MockClock } {
   })
   // The engine's own measure beneath the plugin, echoing what changed.
   on('session.measure', ($, e) => ({ changed: e.changed }))
+  // What the cache-length rule reads: a Haiku session with no settings, in the environment given.
+  mock.env(on, env)
+  on('settings.read', () => ({ value: {} }))
+  on('session.model', () => ({ value: MODEL }))
 
   return { toasts, clock }
 }
@@ -98,7 +104,8 @@ describe('line', () => {
   test('leavesTheRowToTheSurvey_whileOneShows', async ($, on) => {
     mock.store(on)
     engineBeneath(on)
-    on('ui.render', ($, e) => h($.ui.resolve(e).Text, null, 'survey'))
+    // h is typed loosely (any node, null or undefined); given a component it makes an element.
+    on('ui.render', ($, e) => h($.ui.resolve(e).Text, null, 'survey') as RenderElement)
     await measure($, [week(40)])
 
     for (const surface of SURFACES) {
@@ -422,5 +429,551 @@ describe('toasts', () => {
 
     expect(toasts).toHaveLength(2)
     expect(toasts[1]).toBe('session 75%')
+  })
+})
+
+// The model every stand-in in this file runs: the session's, and the one each reply names.
+const MODEL = 'claude-haiku-5-5'
+
+// Usage as input / cache read / cache write / output tokens, as the API reports a request's.
+const usage = (input: number, cacheRead: number, cacheWrite: number, output: number, model = MODEL) => ({
+  input_tokens: input,
+  cache_read_input_tokens: cacheRead,
+  cache_creation_input_tokens: cacheWrite,
+  output_tokens: output,
+  model,
+})
+
+// Stands for the model beneath the plugin: each request answers with the next usage given, null for none.
+function modelBeneath(on: On, usages: (ReturnType<typeof usage> | null)[]) {
+  let next = 0
+  on('turn.step', async function* ($, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: usages[next++] ?? null }
+  })
+}
+
+async function step($: Engine, index = 0, agentId?: string) {
+  const stream = $.turn.step({ turnId: 't1', index, model: MODEL, messageCount: 1, ...(agentId && { agentId }) })
+  for await (const _ of stream);
+  return stream.result
+}
+
+// The plugin's state as it last wrote it, by key; a key never written is absent.
+function stateWrites(on: On): Record<string, unknown> {
+  const written: Record<string, unknown> = {}
+  on('state.set', ($, e, next) => {
+    written[e.key] = e.value
+    return next(e)
+  })
+
+  return written
+}
+
+describe('last request', () => {
+  test('savesTheTimeAndTheWholeContext_ofAMainConversationRequest', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 23_410, 15_245, 300)])
+
+    await step($)
+
+    expect(state.lastRequest).toEqual({ at: NOW, tokens: 38_957 })
+  })
+
+  // A tool turn makes several requests; each carries the whole context, so summing them would count it twice.
+  test('keepsTheLatestRequestsSize_notTheTurnsSum', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 27_298, 11_405, 100), usage(2, 38_703, 155, 50)])
+
+    await step($, 0)
+    await clock.advance(2_000)
+    await step($, 1)
+
+    expect(state.lastRequest).toEqual({ at: NOW + 2_000, tokens: 38_910 })
+  })
+
+  test('ignoresASubagentsRequest', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 38_000, 100, 50), usage(0, 0, 0, 10)])
+
+    await step($)
+    await step($, 0, 'agent-1')
+
+    expect(state.lastRequest).toEqual({ at: NOW, tokens: 38_152 })
+    expect(state.cacheSeen).toEqual({ model: MODEL, cached: true })
+  })
+
+  test('keepsThePreviousRequest_whenAResponseCarriesNoUsage', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 38_000, 100, 50), null])
+
+    await step($)
+    await step($, 1)
+
+    expect(state.lastRequest).toEqual({ at: NOW, tokens: 38_152 })
+  })
+
+  test('seesNoCaching_whenARequestReadsAndWritesNoCache', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(38_663, 0, 0, 5)])
+
+    await step($)
+
+    expect(state.cacheSeen).toEqual({ model: MODEL, cached: false })
+  })
+
+  // The first request of a session writes the cache and reads none; that is caching at work.
+  test('seesCaching_whenARequestOnlyWritesTheCache', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 0, 38_787, 5)])
+
+    await step($)
+
+    expect(state.cacheSeen).toEqual({ model: MODEL, cached: true })
+  })
+
+  // The latest reply counts: caching can come back on, as after a /model change away from a switched-off model.
+  test('keepsWhatTheLatestReplyShowed', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(38_663, 0, 0, 5), usage(2, 0, 38_787, 5, 'claude-opus-5-5')])
+
+    await step($)
+    await step($)
+
+    expect(state.cacheSeen).toEqual({ model: 'claude-opus-5-5', cached: true })
+  })
+})
+
+// Stands for the engine's turns beneath the plugin.
+function turnsBeneath(on: On) {
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+}
+
+const startTurn = ($: Engine) => $.turn.start({ text: 'hi', turnId: 't1' })
+
+const completeTurn = ($: Engine, reason: 'answer' | 'aborted' | 'error' = 'answer', agentId?: string) =>
+  $.turn.complete({ answer: '', durationMs: 1_000, isAborted: reason === 'aborted', turnId: 't1', reason, ...(agentId && { agentId }) })
+
+describe('working', () => {
+  test('isWorking_fromTurnStartUntilTurnComplete', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    turnsBeneath(on)
+    const state = stateWrites(on)
+
+    await startTurn($)
+    expect(state.working).toBe(true)
+    await completeTurn($)
+    expect(state.working).toBe(false)
+  })
+
+  test('stopsWorking_whenTheTurnIsInterruptedOrFails', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    turnsBeneath(on)
+    const state = stateWrites(on)
+
+    for (const reason of ['aborted', 'error'] as const) {
+      await startTurn($)
+      await completeTurn($, reason)
+      expect(state.working).toBe(false)
+    }
+  })
+
+  test('staysWorking_whenASubagentsRunCompletesMidTurn', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    turnsBeneath(on)
+    const state = stateWrites(on)
+
+    await startTurn($)
+    await completeTurn($, 'answer', 'agent-1')
+
+    expect(state.working).toBe(true)
+  })
+})
+
+// A compaction's transcript and what it leaves: a summary message.
+const SUMMARY: SessionMessage[] = [{ role: 'user', text: 'Summary of the conversation so far.', toolUses: [] }]
+
+// Stands for the engine's session events beneath the plugin; a compaction is vetoed when `veto` is given.
+function sessionEventsBeneath(on: On, veto?: string) {
+  on('classic.SessionStart', () => ({}))
+  on('session.compact', () => (veto ? { skip: veto } : { messages: SUMMARY }))
+}
+
+// What Claude Code reported in the live probe's `--continue` after 461 s (plan A7).
+const resume = ($: Engine, source: 'resume' | 'fork' = 'resume') =>
+  $.classic.SessionStart({
+    source,
+    seconds_since_last_response: 461,
+    context_tokens: 38_863,
+    prompt_cache_likely_expired: true,
+    estimated_cache_write_usd: 0.3109,
+  })
+
+const compact = ($: Engine, trigger: 'manual' | 'auto' | 'precompute' = 'manual', agentId?: string) =>
+  $.session.compact({ trigger, messages: SUMMARY, ...(agentId && { agentId }) })
+
+describe('session changes', () => {
+  test('takesTheLastRequestAndCacheVerdict_fromAResumeOrFork', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    const state = stateWrites(on)
+
+    for (const source of ['resume', 'fork'] as const) {
+      await resume($, source)
+
+      expect(state.lastRequest).toEqual({ at: NOW - 461_000, tokens: 38_863 })
+      expect(state.resumed).toEqual({ cacheLikelyExpired: true, gapSeconds: 461, cacheWriteUsd: 0.3109 })
+    }
+  })
+
+  // Claude Code's verdict was about the pause before the resume; the first request answers it.
+  test('dropsTheResumeVerdict_onTheFirstRequest', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    const state = stateWrites(on)
+    modelBeneath(on, [usage(2, 0, 39_026, 5)])
+
+    await resume($)
+    await step($)
+
+    expect(state.resumed).toBeNull()
+    expect(state.lastRequest).toEqual({ at: NOW, tokens: 39_033 })
+  })
+
+  test('forgetsTheLastRequest_afterClear', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    const state = stateWrites(on)
+
+    await resume($)
+    await $.classic.SessionStart({ source: 'clear' })
+
+    expect(state.lastRequest).toBeNull()
+    expect(state.resumed).toBeNull()
+  })
+
+  test('leavesTheLastRequestAlone_atStartup', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    const state = stateWrites(on)
+
+    await $.classic.SessionStart({ source: 'startup' })
+
+    expect('lastRequest' in state).toBe(false)
+  })
+
+  // 400k tokens compacted to a 30k summary: a warning about re-reading 400k, or its price, would be wrong.
+  test('forgetsTheSizeAndResumeVerdict_afterAManualOrAutoCompaction', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on)
+    const state = stateWrites(on)
+
+    for (const trigger of ['manual', 'auto'] as const) {
+      await resume($)
+      await compact($, trigger)
+
+      expect(state.lastRequest).toBeNull()
+      expect(state.resumed).toBeNull()
+    }
+  })
+
+  test('keepsTheSize_whenACompactionIsPrecomputedForASubagentOrVetoed', async ($, on) => {
+    mock.store(on)
+    engineBeneath(on)
+    sessionEventsBeneath(on, 'blocked by a PreCompact hook')
+    const state = stateWrites(on)
+
+    await resume($)
+    await compact($, 'precompute')
+    await compact($, 'manual', 'agent-1')
+    await compact($, 'manual')
+
+    expect(state.lastRequest).toEqual({ at: NOW - 461_000, tokens: 38_863 })
+    expect(state.resumed).toEqual({ cacheLikelyExpired: true, gapSeconds: 461, cacheWriteUsd: 0.3109 })
+  })
+})
+
+// A Pro subscriber within the plan's included usage, on Haiku, nothing set: the default 1 hour (plan A2).
+const inputs = (over: Partial<CacheInputs> = {}): CacheInputs => ({
+  env: {},
+  setting: undefined,
+  model: MODEL,
+  rateLimits: [session(25), week(10)],
+  cacheSeen: null,
+  ...over,
+})
+
+describe('cache length', () => {
+  test('isOneHour_forASubscriberWithinIncludedUsage', () => {
+    expect(cacheLength(inputs())).toBe('1h')
+  })
+
+  test('isFiveMinutes_onUsageCredits_whenAWindowIsAt100', () => {
+    expect(cacheLength(inputs({ rateLimits: [session(100), week(40)] }))).toBe('5m')
+  })
+
+  // An API key or a cloud provider reports no limit windows; so does a gateway's spend_limit alone.
+  test('isFiveMinutes_withoutLimitWindows', () => {
+    expect(cacheLength(inputs({ rateLimits: [] }))).toBe('5m')
+    expect(cacheLength(inputs({ rateLimits: [{ kind: 'spend_limit', percentUsed: 10 }] }))).toBe('5m')
+  })
+
+  test('takesTheEnvOverTheSetting_andTheSettingOverTheDefault', () => {
+    expect(cacheLength(inputs({ env: { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' } }))).toBe('5m')
+    expect(cacheLength(inputs({ setting: '5m' }))).toBe('5m')
+    expect(cacheLength(inputs({ env: { CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }, setting: '5m' }))).toBe('1h')
+    expect(cacheLength(inputs({ rateLimits: [], setting: '1h' }))).toBe('1h')
+  })
+
+  test('forcesFiveMinutes_overTheEnvAndSetting', () => {
+    expect(cacheLength(inputs({ env: { FORCE_PROMPT_CACHING_5M: '1', CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }, setting: '1h' }))).toBe('5m')
+  })
+
+  // Claude Code reads 1, true, yes and on as on; FORCE_PROMPT_CACHING_5M=true forced 5 minutes, =0 did not (A12).
+  test('readsAnOnOffVariable_asClaudeCodeDoes', () => {
+    for (const value of ['1', 'true', 'YES', ' on ']) {
+      expect(cacheLength(inputs({ env: { FORCE_PROMPT_CACHING_5M: value } }))).toBe('5m')
+    }
+    for (const value of ['0', 'false', '']) {
+      expect(cacheLength(inputs({ env: { FORCE_PROMPT_CACHING_5M: value } }))).toBe('1h')
+    }
+  })
+
+  test('isOneHour_withEnable1h_whenNoLimitWindowsShow', () => {
+    expect(cacheLength(inputs({ rateLimits: [], env: { ENABLE_PROMPT_CACHING_1H: '1' } }))).toBe('1h')
+  })
+
+  test('ignoresAnUnknownLengthValue', () => {
+    expect(cacheLength(inputs({ env: { CLAUDE_CODE_PROMPT_CACHE_TTL: '10m' }, setting: 5 }))).toBe('1h')
+  })
+
+  test('isOff_whenCachingIsDisabled_whateverElseIsSet', () => {
+    expect(cacheLength(inputs({ env: { DISABLE_PROMPT_CACHING: '1', FORCE_PROMPT_CACHING_5M: '1' } }))).toBe('off')
+  })
+
+  test('isOff_onlyForTheSessionsModelsSwitch', () => {
+    expect(cacheLength(inputs({ env: { DISABLE_PROMPT_CACHING_HAIKU: '1' } }))).toBe('off')
+    expect(cacheLength(inputs({ env: { DISABLE_PROMPT_CACHING_OPUS: '1' } }))).toBe('1h')
+    expect(cacheLength(inputs({ model: 'claude-opus-5-5', env: { DISABLE_PROMPT_CACHING_OPUS: '1' } }))).toBe('off')
+  })
+
+  test('isOff_whenTheLatestReplyOnThisModelUsedNoCache', () => {
+    expect(cacheLength(inputs({ cacheSeen: { model: MODEL, cached: false } }))).toBe('off')
+  })
+
+  test('matchesFableAndMythos_byName', () => {
+    expect(cacheLength(inputs({ model: 'claude-fable-5-1', env: { DISABLE_PROMPT_CACHING_FABLE: '1' } }))).toBe('off')
+    expect(cacheLength(inputs({ model: 'claude-mythos-1', env: { DISABLE_PROMPT_CACHING_MYTHOS: '1' } }))).toBe('off')
+    expect(cacheLength(inputs({ model: 'claude-fable-5-1', env: { DISABLE_PROMPT_CACHING_MYTHOS: '1' } }))).toBe('1h')
+  })
+
+  // Live, claude-haiku-4-5 with DISABLE_PROMPT_CACHING_HAIKU=1 still read 23,750 tokens from the cache: Claude
+  // Code's switch covers only the family's default model (A15). The reply corrects the family-name guess.
+  test('trustsTheReply_overAPerModelSwitch_onTheSameModel', () => {
+    const old = { model: 'claude-haiku-4-5', env: { DISABLE_PROMPT_CACHING_HAIKU: '1' } }
+    expect(cacheLength(inputs(old))).toBe('off')
+    expect(cacheLength(inputs({ ...old, cacheSeen: { model: 'claude-haiku-4-5-20251001', cached: true } }))).toBe('1h')
+  })
+
+  test('ignoresAReplyFromAnotherModel', () => {
+    const switched = { model: 'claude-opus-5-5', env: { DISABLE_PROMPT_CACHING_OPUS: '1' } }
+    expect(cacheLength(inputs({ ...switched, cacheSeen: { model: MODEL, cached: true } }))).toBe('off')
+    expect(cacheLength(inputs({ cacheSeen: { model: 'claude-opus-5-5', cached: false } }))).toBe('1h')
+  })
+
+  test('takesAModelWithAContextSuffix_asTheSameModel', () => {
+    expect(cacheLength(inputs({ model: 'claude-opus-5-5[1m]', cacheSeen: { model: 'claude-opus-5-5', cached: false } }))).toBe('off')
+  })
+})
+
+const at = (hhmm: string) => Date.parse(`2026-10-09T${hhmm}:00Z`)
+
+// The plan's step 5 setting: 150k tokens, 1-hour cache, last reply 13:10, now 14:20, idle, default settings.
+const coldInputs = (over: Partial<ColdInputs> = {}): ColdInputs => ({
+  warnCold: true,
+  coldTokens: 100_000,
+  working: false,
+  lastRequest: { at: at('13:10'), tokens: 150_000 },
+  resumed: null,
+  cacheLength: '1h',
+  now: at('14:20'),
+  ...over,
+})
+
+describe('cold check', () => {
+  test('isCold_whenTheLastReplyIsOlderThanTheCache', () => {
+    expect(isCold(coldInputs())).toBe(true)
+  })
+
+  test('isNotCold_withinTheCacheLength', () => {
+    expect(isCold(coldInputs({ lastRequest: { at: at('13:40'), tokens: 150_000 } }))).toBe(false)
+    expect(isCold(coldInputs({ now: at('14:10') }))).toBe(false)
+  })
+
+  test('isColdAfterFiveMinutes_withAFiveMinuteCache', () => {
+    expect(isCold(coldInputs({ cacheLength: '5m', now: at('13:15') }))).toBe(false)
+    expect(isCold(coldInputs({ cacheLength: '5m', now: at('13:16') }))).toBe(true)
+  })
+
+  test('isNotCold_underColdTokens', () => {
+    expect(isCold(coldInputs({ lastRequest: { at: at('11:00'), tokens: 60_000 } }))).toBe(false)
+    expect(isCold(coldInputs({ lastRequest: { at: at('11:00'), tokens: 60_000 }, coldTokens: 50_000 }))).toBe(true)
+  })
+
+  test('isNotCold_whileATurnRuns', () => {
+    expect(isCold(coldInputs({ working: true }))).toBe(false)
+  })
+
+  test('isNotCold_whenCachingIsOffOrWarningIsOff', () => {
+    expect(isCold(coldInputs({ cacheLength: 'off' }))).toBe(false)
+    expect(isCold(coldInputs({ warnCold: false }))).toBe(false)
+  })
+
+  // After /clear or a compaction the size is unknown until the next reply.
+  test('isNotCold_withoutALastRequest', () => {
+    expect(isCold(coldInputs({ lastRequest: null }))).toBe(false)
+  })
+
+  // Claude Code knows the length the cache was written with; the plugin's own rule may not, right after a resume.
+  test('takesClaudeCodesVerdict_rightAfterAResume', () => {
+    const resumed = { cacheLikelyExpired: true, gapSeconds: 400, cacheWriteUsd: 0.54 }
+    expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:13'), tokens: 150_000 } }))).toBe(true)
+  })
+
+  test('turnsColdByTime_afterAResumeWhoseCacheWasStillWarm', () => {
+    const resumed = { cacheLikelyExpired: false, gapSeconds: 600, cacheWriteUsd: 0.54 }
+    expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:10'), tokens: 150_000 } }))).toBe(false)
+    expect(isCold(coldInputs({ resumed, lastRequest: { at: at('14:10'), tokens: 150_000 }, now: at('15:11') }))).toBe(true)
+  })
+})
+
+// A 150k-token reply at NOW (the test's modelBeneath answers it), on a subscriber's 1-hour cache, then `idle` minutes.
+async function replyThenIdle($: Engine, clock: MockClock, idle: number) {
+  await measure($, [session(41), week(18)], 62, 1.84)
+  await step($)
+  await clock.advance(idle * 60_000)
+}
+
+describe('cold line', () => {
+  test('showsCacheColdInRed_afterItsOwnContextItem_onceTheCacheExpires', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    for (const surface of SURFACES) {
+      const { line, texts } = await mountLine($, surface)
+      expect(line).toBe('context 62% · cache cold · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 1h9m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d)')
+      expect(texts.find(t => t.text === 'cache cold')?.props.color).toBe('error')
+    }
+  })
+
+  test('showsNoColdItem_withinTheCacheLength', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await replyThenIdle($, clock, 59)
+
+    expect(await lineText($, 'terminal')).not.toContain('cold')
+  })
+
+  test('namesItColdOrSnowflake_inTheNarrowerLayouts', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    const layouts = [
+      'context 62% · cache cold · $1.84 · session ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 1h9m) · week ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d)',
+      'ctx 62% · cold · $1.84 · s ⣿⣿⣿⣀⣀⣀⣀⣀ 41% (↻ 1h9m) · w ⣿⣀⣀⣀⣀⣀⣀⣀ 18% (↻ 3d)',
+      'ctx 62% · cold · $1.84 · s 41% (↻ 1h9m) · w 18% (↻ 3d)',
+      'ctx 62% · ❆ · $1.84 · s 41% · w 18%',
+    ]
+    for (const surface of SURFACES) {
+      for (const [i, line] of layouts.entries()) {
+        expect(await lineText($, surface, line.length)).toBe(line)
+        expect(await lineText($, surface, line.length - 1)).toBe(layouts[i + 1] ?? line)
+      }
+    }
+  })
+
+  // The docs' "At most" widths: both windows at 100%, $123.45, and the longest countdowns.
+  test('needsAtMost101_82_64_40Columns_withTheColdItem', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await step($)
+    await clock.advance(61 * 60_000)
+    const longest = (minutes: number) => new Date(NOW + 61 * 60_000 + minutes * 60_000).toISOString()
+    await measure($, [session(100, longest(4 * 60 + 59)), week(100, longest(23 * 60 + 59))], 100, 123.45)
+
+    const widths = [101, 82, 64, 40]
+    for (const [i, width] of widths.entries()) {
+      const line = await lineText($, 'terminal', width)
+      expect(line?.length).toBe(width)
+      // The narrowest layout shows even where it doesn't fit.
+      if (i < 3) expect(await lineText($, 'terminal', width - 1)).not.toBe(line)
+      else expect(line).toContain('❆')
+    }
+  })
+
+  test('turnsCold_onTheMinuteTimer_withoutANewReading', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await replyThenIdle($, clock, 59)
+
+    const ui = await $.ui.mount({ plugin: 'usage-bar', surface: 'terminal', ...abovePrompt() })
+    const coldItem = async () => (await ui.findAll({ type: 'Box' })).find(box => box.key === 'item:1')?.text
+    expect(await coldItem()).toBe('$1.84')
+    await clock.advance(2 * 60_000)
+    expect(await coldItem()).toBe('cache cold')
+    await ui.unmount()
+  })
+
+  test('hidesTheColdItem_whileAReplyRuns', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on)
+    turnsBeneath(on)
+    modelBeneath(on, [usage(2, 150_000, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    await startTurn($)
+
+    expect(await lineText($, 'terminal')).not.toContain('cold')
+  })
+
+  test('showsNoColdItem_whenCachingIsDisabled', async ($, on) => {
+    mock.store(on)
+    const { clock } = engineBeneath(on, { DISABLE_PROMPT_CACHING: '1' })
+    // With caching off a reply reads and writes no cache, its whole context uncached (A2).
+    modelBeneath(on, [usage(150_000, 0, 0, 0)])
+    await replyThenIdle($, clock, 61)
+
+    expect(await lineText($, 'terminal')).not.toContain('cold')
   })
 })
