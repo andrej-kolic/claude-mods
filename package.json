@@ -1,10 +1,11 @@
 {
   "name": "claude-mods",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
     "test": "for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin test \"$d\" || exit 1; done",
+    "format": "biome check --write",
+    "lint": "biome check",
+    "typecheck": "for d in plugins/*/; do [ -f \"$d/tsconfig.json\" ] || continue; tsc --noEmit -p \"$d\" || exit 1; done",
     "validate": "claude plugin validate . && for d in plugins/*/; do [ -d \"$d\" ] || continue; claude plugin validate \"$d\" || exit 1; done",
     "rules:install": "rulesync install && rulesync generate -f rules -t claudecode,cursor",
     "rules:outdated": "pnpm dlx github:andrej-kolic/playbook rules --check",
@@ -22,6 +23,8 @@
   },
   "type": "module",
   "devDependencies": {
-    "rulesync": "^27.0.0"
+    "@biomejs/biome": "^2.5.15",
+    "rulesync": "^27.0.0",
+    "typescript": "^7.0.2"
   }
 }

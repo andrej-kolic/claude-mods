@@ -23,30 +23,10 @@ Only mods listed in `.claude-plugin/marketplace.json` can be installed.
 
 ## Mods
 
-| Mod | What it does | Status |
-|---|---|---|
-| `usage-bar` | Usage limits, context and cost above the prompt; keeps your status line | Ready: [spec](docs/usage-bar.md) |
+| | Mod | What it does | Status |
+|---|---|---|---|
+| <img src="plugins/usage-bar/.claude-plugin/icon.svg" width="32" alt=""> | `usage-bar` | Usage limits, context and cost above the prompt; keeps your status line | Ready: [spec](docs/usage-bar.md) |
 
 ## Develop a mod
 
-Ask Claude Code to build or change a mod. It loads the built-in `plugin-authoring` skill, which has the API types and examples.
-
-Run a session with a mod loaded:
-
-```bash
-claude --plugin-dir ./plugins/usage-bar
-```
-
-Load a mod this way once before editing it. Loading writes the API types to `.claude-plugin/types/`, which git ignores and the mod's `tsconfig.json` extends, so your editor and `tsc -p ./plugins/<mod>` find them.
-
-To publish a finished mod, add an entry for it to `.claude-plugin/marketplace.json`, with `"source": "./plugins/<mod>"`.
-
-Check it:
-
-```bash
-claude plugin validate ./plugins/usage-bar
-claude plugin test ./plugins/usage-bar
-claude plugin validate .   # the marketplace file
-```
-
-Or check the marketplace file and every mod at once with `pnpm validate` and `pnpm test`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, check and publish a mod, and how to open an issue or PR.

@@ -1,6 +1,6 @@
 {
   "name": "usage-bar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Usage limits, context and cost above the prompt; keeps your status line",
   "author": {
     "name": "andrej-kolic"
@@ -10,5 +10,20 @@
   "supportUrl": "https://github.com/andrej-kolic/claude-mods/issues",
   "privacyPolicyUrl": "https://github.com/andrej-kolic/claude-mods/tree/main/plugins/usage-bar#privacy",
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "warnCold": {
+      "type": "boolean",
+      "title": "Show cache cold",
+      "description": "Show a red \"cache cold\" on the line once the prompt cache has expired, so you know your next message re-reads the whole conversation at full price.",
+      "default": true
+    },
+    "coldTokens": {
+      "type": "number",
+      "title": "Cache cold from (tokens)",
+      "description": "Show \"cache cold\" only when the conversation has at least this many tokens; below it, re-reading costs little.",
+      "default": 100000,
+      "min": 1000
+    }
+  }
 }
