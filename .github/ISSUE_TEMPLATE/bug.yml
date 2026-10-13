@@ -1,0 +1,30 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Claude Code version (`claude --version`), the mod and its version, where it runs (terminal, desktop app, VS Code), and your OS.
+      placeholder: |
+        Claude Code: 2.1.280
+        Mod: usage-bar 0.2.0
+        Runs in: terminal (iTerm2)
+        OS: macOS 15
+    validations:
+      required: true
