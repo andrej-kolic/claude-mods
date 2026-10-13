@@ -7,7 +7,10 @@ Your plan's usage limits, context and cost on one quiet line above the prompt, w
 The line sits at the right edge, away from where you read and type. First, this conversation:
 
 - `context`: how full the context window is.
-- `cache cold`, in red, after a break: the conversation is no longer cached, so your next message re-reads all of it at full price. It shows only for conversations of 100,000 tokens or more. Turn it off, or change that size, in `/config`.
+- `cache cold`, in red: the conversation's cache has expired, so your next message re-reads all of it at full price.
+  - It works right after `/resume` too, before you send anything.
+  - It shows only for conversations of 100,000 tokens or more. Change that size, or turn it off, in `/config`.
+  - It doesn't notice a cache broken by switching models, but `/model` warns you about that itself.
 - `$`: what this session has cost.
 
 Then your account's limits:

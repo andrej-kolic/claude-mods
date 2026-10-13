@@ -14,6 +14,7 @@ One line above the prompt with the session's context fill and cost, plus the pla
    - `cache cold` (`cold` in the short layouts, `❆` in the tiny one), in the theme's `error` colour, its own item right after `context`: the prompt cache has expired, so the next message re-reads the whole context at the cache-write price.
      - **Shows when** the last reply carried at least `coldTokens` tokens (a `/config` setting, 100,000 by default, at least 1,000) and is older than the cache length. Never while a reply runs or with caching off. Right after a resume, Claude Code's own verdict decides only when the conversation file gave no length: it reads just the last reply, and falls back to its rules when that reply wrote no cache. The minute timer turns it on without a new reading.
      - **Turned off** by the `warnCold` setting (on by default).
+     - **Doesn't see** a cache broken before it expires, by a `/model` switch or changed tools: Claude Code counts these as misses, but a mod can't read them. `/model` warns about its own case.
      - **Cache length**, the first that applies:
        1. The length the latest reply that wrote the cache used: its row in the conversation file splits the write into `ephemeral_1h_input_tokens` and `ephemeral_5m_input_tokens`.
        2. `FORCE_PROMPT_CACHING_5M`, then `CLAUDE_CODE_PROMPT_CACHE_TTL`, then the `promptCacheTtl` setting.
