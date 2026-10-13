@@ -2,10 +2,20 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionMeasureInput, Timer } from 'claude-code'
 
 import type { LimitReading, Reading } from '../types'
+import { cacheLength, isCold, writtenLength, type CacheInputs } from './cache'
 
 const reading = atom({ plugin: 'usage-bar', key: 'reading' } as const, null)
 // Bumped each minute so the countdowns redraw while no reading arrives.
 const minute = atom({ plugin: 'usage-bar', key: 'minute' } as const, 0)
+const lastRequest = atom({ plugin: 'usage-bar', key: 'lastRequest' } as const, null)
+// What the latest main-conversation reply showed about the cache; see CacheSeen.
+const cacheSeen = atom({ plugin: 'usage-bar', key: 'cacheSeen' } as const, null)
+// True while a main-conversation turn runs: the cache is being used, so it is never cold then.
+const working = atom({ plugin: 'usage-bar', key: 'working' } as const, false)
+const resumed = atom({ plugin: 'usage-bar', key: 'resumed' } as const, null)
+// This session's conversation file, as classic.SessionStart names it, and the cache length its latest write used.
+const transcript = atom({ plugin: 'usage-bar', key: 'transcript' } as const, null)
+const written = atom({ plugin: 'usage-bar', key: 'written' } as const, null)
 
 // Alerts at 50%, then claude.ai's own warning (75%) and critical (90%) colours on Settings → Usage.
 const THRESHOLDS = [50, 75, 90]
@@ -75,19 +85,27 @@ const lineLength = (items: Item[]) =>
   items.reduce((n, item) => n + item.reduce((m, s) => m + s.text.length, 0), 0) +
   Math.max(0, items.length - 1) * SEPARATOR
 
-function lineItems(r: Reading, columns: number, now: number): Item[] {
+function lineItems(r: Reading, columns: number, now: number, cold: boolean): Item[] {
   const fits = (items: Item[]) => lineLength(items) <= columns
 
   // The narrowest layout shows even where nothing fits.
-  return LAYOUTS.map(layout => layoutItems(r, layout, now)).find(fits) ?? layoutItems(r, 'tiny', now)
+  return LAYOUTS.map(layout => layoutItems(r, layout, now, cold)).find(fits) ?? layoutItems(r, 'tiny', now, cold)
 }
 
-function layoutItems(r: Reading, layout: Layout, now: number): Item[] {
+// The cold item's text by layout: its own item after context, so it never reads as the context being cold.
+// ❆ (U+2746) is not an emoji, so it takes one column; ❄ (U+2744) can draw two wide.
+const COLD_TEXT: Record<Layout, string> = { full: 'cache cold', 'short-bars': 'cold', short: 'cold', tiny: '❆' }
+
+function layoutItems(r: Reading, layout: Layout, now: number, cold: boolean): Item[] {
   // A figure the reading lacks is a dash, not a made-up 0: the fill before any response
   // reports it, the cost where Claude Code keeps no cost record.
   const ctx = r.contextPercent === undefined ? '–' : `${Math.floor(r.contextPercent)}%`
   const usd = r.usd === undefined ? '–' : r.usd.toFixed(2)
-  const conversation: Item[] = [[{ text: `${layout === 'full' ? 'context' : 'ctx'} ${ctx}` }], [{ text: `$${usd}` }]]
+  const conversation: Item[] = [
+    [{ text: `${layout === 'full' ? 'context' : 'ctx'} ${ctx}` }],
+    ...(cold ? [[{ text: COLD_TEXT[layout], color: 'error' as const }]] : []),
+    [{ text: `$${usd}` }],
+  ]
 
   const limits: Item[] = []
   for (const limit of r.rateLimits) {
@@ -123,16 +141,80 @@ const toReading = (u: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost
   rateLimits: u.rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })),
 })
 
-// After /clear the new session holds no reading, and none is measured until the next turn ends; the engine
-// still has the last response's limits, so draw those. Null while it has none: before the startup quota check.
-// Drawing can't write state, so the next session.measure is what stores a reading.
+// After /clear, /resume or /branch the new session holds no reading, and none is measured until the next turn
+// ends; the engine still has the last response's limits, or the resumed conversation's context and cost, so draw
+// those. Null while it has none: before the startup quota check. The CLI's cost ledger is always there, so a cost
+// alone is no reading. Drawing can't write state, so the next session.measure is what stores a reading.
 async function engineReading($: EngineInterface): Promise<Reading | null> {
   const usage = await $.session.usage().catch(() => undefined)
+  const has = usage && (usage.rateLimits.length > 0 || usage.context.percent !== undefined)
 
-  return usage && usage.rateLimits.length > 0 ? toReading(usage) : null
+  return has ? toReading(usage) : null
 }
 
-export const register: Register = on => {
+// The last 256 KiB of the conversation file hold the latest reply's row (A18). A failed or empty read, or a tail
+// with no cache write, keeps the last known length.
+const TAIL_BYTES = '262144'
+
+async function readWritten($: EngineInterface): Promise<void> {
+  try {
+    const path = await read($, transcript)
+    if (path === null) return
+    const { exitCode, stdout } = await $.process.run(['tail', '-c', TAIL_BYTES, path])
+    const length = exitCode === 0 ? writtenLength(stdout) : undefined
+    if (length !== undefined) await update($, written, () => length)
+  } catch {
+    // No file, no tail, no process access: the rules decide.
+  }
+}
+
+// Read each time the check runs: the limits change, and arrive only with the first reading (A3.5).
+// $.env.get takes literal names only.
+async function cacheInputs($: EngineInterface): Promise<CacheInputs> {
+  const settings = (await $.settings.read().catch(() => ({}))) as { promptCacheTtl?: unknown }
+  const r = (await read($, reading)) ?? (await engineReading($))
+
+  return {
+    env: {
+      DISABLE_PROMPT_CACHING: await $.env.get('DISABLE_PROMPT_CACHING'),
+      DISABLE_PROMPT_CACHING_HAIKU: await $.env.get('DISABLE_PROMPT_CACHING_HAIKU'),
+      DISABLE_PROMPT_CACHING_SONNET: await $.env.get('DISABLE_PROMPT_CACHING_SONNET'),
+      DISABLE_PROMPT_CACHING_OPUS: await $.env.get('DISABLE_PROMPT_CACHING_OPUS'),
+      DISABLE_PROMPT_CACHING_FABLE: await $.env.get('DISABLE_PROMPT_CACHING_FABLE'),
+      DISABLE_PROMPT_CACHING_MYTHOS: await $.env.get('DISABLE_PROMPT_CACHING_MYTHOS'),
+      FORCE_PROMPT_CACHING_5M: await $.env.get('FORCE_PROMPT_CACHING_5M'),
+      CLAUDE_CODE_PROMPT_CACHE_TTL: await $.env.get('CLAUDE_CODE_PROMPT_CACHE_TTL'),
+      ENABLE_PROMPT_CACHING_1H: await $.env.get('ENABLE_PROMPT_CACHING_1H'),
+    },
+    setting: settings.promptCacheTtl,
+    model: await $.session.model(),
+    rateLimits: r?.rateLimits ?? [],
+    cacheSeen: await read($, cacheSeen),
+    written: await read($, written),
+  }
+}
+
+// The cache warning's /config settings (plugin.json userConfig), defaults filled in by the engine.
+type ColdSettings = { warnCold: boolean; coldTokens: number }
+
+// Whether the cache is cold now, from the plugin's state and the engine; read where the line needs it.
+async function coldNow($: EngineInterface, coldSettings: ColdSettings): Promise<boolean> {
+  const inputs = await cacheInputs($)
+
+  return isCold({
+    ...coldSettings,
+    working: await read($, working),
+    lastRequest: await read($, lastRequest),
+    resumed: await read($, resumed),
+    cacheLength: cacheLength(inputs),
+    lengthFromFile: inputs.written !== null,
+    now: await $.clock.now(),
+  })
+}
+
+export const register: Register = (on, options) => {
+  const coldSettings: ColdSettings = { warnCold: options.warnCold === true, coldTokens: Number(options.coldTokens) }
+
   // One timer per module: session.start can fire again without a reload, and a reload drops the old timer itself.
   let tick: Timer | undefined
 
@@ -163,6 +245,75 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // $.state starts empty after /clear, /resume and /branch, and no request has told the plugin anything yet.
+  // A resume or fork reports the transcript's last response, so the bar knows the pause before the first message,
+  // and the file already holds that response's row.
+  on('classic.SessionStart', async ($, e, next) => {
+    const path = e.transcript_path
+    if (path) await update($, transcript, () => path)
+    if (e.source === 'clear') {
+      await update($, lastRequest, () => null)
+      await update($, resumed, () => null)
+    }
+    if ((e.source === 'resume' || e.source === 'fork') && e.seconds_since_last_response !== undefined && e.context_tokens !== undefined) {
+      const { seconds_since_last_response: gapSeconds, context_tokens: tokens } = e
+      const at = (await $.clock.now()) - gapSeconds * 1000
+      await update($, lastRequest, () => ({ at, tokens }))
+      await update($, resumed, () => ({ cacheLikelyExpired: e.prompt_cache_likely_expired ?? false }))
+    }
+    if (e.source === 'resume' || e.source === 'fork') await readWritten($)
+
+    return next(e)
+  })
+
+  // A compaction replaces the conversation with a summary, so the last size and a resume's verdict on it no
+  // longer hold; the next request reports the new size. A precompute installs nothing, a vetoed one changes
+  // nothing, a subagent's isn't ours.
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    if (e.agentId === undefined && e.trigger !== 'precompute' && result.skip === undefined) {
+      await update($, lastRequest, () => null)
+      await update($, resumed, () => null)
+    }
+
+    return result
+  })
+
+  on('turn.start', async ($, e, next) => {
+    await update($, working, () => true)
+
+    return next(e)
+  })
+
+  // Every way a turn ends completes it: answered, interrupted, refused or failed. A subagent's run completes
+  // with its agentId while the main turn still runs; it raises no turn.start, and writes a file of its own.
+  // The reply's row lands in the file 300–600 ms after the request returns (A18), so read it a second later.
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      await update($, working, () => false)
+      $.clock.after(1_000, () => void readWritten($))
+    }
+
+    return next(e)
+  })
+
+  // Subagents' requests (agentId set) run on their own cache, so only the main conversation's count.
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+    const usage = result.usage
+    if (e.agentId !== undefined || usage === null) return result
+
+    const { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens } = usage
+    const tokens = input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens
+    const at = await $.clock.now()
+    await update($, lastRequest, () => ({ at, tokens }))
+    await update($, resumed, () => null)
+    const cached = cache_read_input_tokens > 0 || cache_creation_input_tokens > 0
+    await update($, cacheSeen, () => ({ model: usage.model, cached }))
+
+    return result
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
 
@@ -179,7 +330,7 @@ export const register: Register = on => {
     }
 
     await read($, minute)
-    const items = lineItems(r, e.props.bodyColumns, await $.clock.now())
+    const items = lineItems(r, e.props.bodyColumns, await $.clock.now(), await coldNow($, coldSettings))
 
     // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
     // and a wrapped piece would make the row jump to two lines. Cut it short instead.
