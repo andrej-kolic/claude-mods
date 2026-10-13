@@ -35,13 +35,13 @@ const week = (percentUsed: number, resetsAt = PERIOD): SessionRateLimit => ({
 function engineBeneath(on: On, env: Record<string, string> = {}): { toasts: string[]; clock: MockClock } {
   const clock = mock.clock(on, { now: NOW })
   const toasts: string[] = []
-  on('ui.toast', ($, e) => {
+  on('ui.toast', (_$, e) => {
     toasts.push(e.text)
 
     return { value: undefined }
   })
   // The engine's own measure beneath the plugin, echoing what changed.
-  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('session.measure', (_$, e) => ({ changed: e.changed }))
   // What the cache-length rule reads: a Haiku session with no settings, in the environment given.
   mock.env(on, env)
   on('settings.read', () => ({ value: {} }))
@@ -268,7 +268,7 @@ describe('line', () => {
   test('redrawsTheCountdownEachMinute_withoutANewReading', async ($, on) => {
     mock.store(on)
     const { clock } = engineBeneath(on)
-    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('session.start', (_$, e) => ({ cwd: e.cwd }))
     await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
     await measure($, [session(10)])
 
@@ -284,9 +284,9 @@ describe('line', () => {
   test('keepsOneTimer_whenSessionStartFiresAgain', async ($, on) => {
     mock.store(on)
     const { clock } = engineBeneath(on)
-    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('session.start', (_$, e) => ({ cwd: e.cwd }))
     let ticks = 0
-    on('state.set', ($, e, next) => {
+    on('state.set', (_$, e, next) => {
       if (e.key === 'minute') ticks++
       return next(e)
     })
@@ -416,8 +416,8 @@ describe('toasts', () => {
   test('stillToasts_whenSavingAWindowRecordFails', async ($, on) => {
     // A store in memory whose weekly write fails; mock.store has no way to fail a write.
     const store = new Map<string, unknown>()
-    on('store.get', ($, e) => ({ value: store.get(e.key) }))
-    on('store.set', ($, e) => {
+    on('store.get', (_$, e) => ({ value: store.get(e.key) }))
+    on('store.set', (_$, e) => {
       if (e.key === 'toasted:seven_day') throw new Error('disk full')
       store.set(e.key, e.value)
 
@@ -457,7 +457,8 @@ const usage = (input: number, cacheRead: number, cacheWrite: number, output: num
 // Stands for the model beneath the plugin: each request answers with the next usage given, null for none.
 function modelBeneath(on: On, usages: (ReturnType<typeof usage> | null)[]) {
   let next = 0
-  on('turn.step', async function* ($, e) {
+  // biome-ignore lint/correctness/useYield: turn.step takes a generator; this one streams no chunks, only the final step.
+  on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: usages[next++] ?? null }
   })
 }
@@ -471,7 +472,7 @@ async function step($: Engine, index = 0, agentId?: string) {
 // The plugin's state as it last wrote it, by key; a key never written is absent.
 function stateWrites(on: On): Record<string, unknown> {
   const written: Record<string, unknown> = {}
-  on('state.set', ($, e, next) => {
+  on('state.set', (_$, e, next) => {
     written[e.key] = e.value
     return next(e)
   })
@@ -569,8 +570,8 @@ describe('last request', () => {
 
 // Stands for the engine's turns beneath the plugin.
 function turnsBeneath(on: On) {
-  on('turn.start', ($, e) => ({ turnId: e.turnId }))
-  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
 }
 
 const startTurn = ($: Engine) => $.turn.start({ text: 'hi', turnId: 't1' })
@@ -974,7 +975,7 @@ describe('cold line', () => {
   test('turnsCold_onTheMinuteTimer_withoutANewReading', async ($, on) => {
     mock.store(on)
     const { clock } = engineBeneath(on)
-    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('session.start', (_$, e) => ({ cwd: e.cwd }))
     modelBeneath(on, [usage(2, 150_000, 0, 0)])
     await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
     await replyThenIdle($, clock, 59)
@@ -1061,7 +1062,7 @@ const row = (oneHour: number, fiveMinutes: number) =>
 // as a missing file when they are null. Records each command, so a test can tell when the file was read.
 function fileBeneath(on: On, rows: string[] | null) {
   const file = { rows, reads: [] as (readonly string[])[] }
-  on('process.run', ($, e) => {
+  on('process.run', (_$, e) => {
     file.reads.push(e.argv)
     const result = { stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
 

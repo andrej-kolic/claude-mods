@@ -50,3 +50,5 @@ claude plugin validate .   # the marketplace file
 ```
 
 Or check the marketplace file and every mod at once with `pnpm validate` and `pnpm test`.
+
+Format, lint and type-check every mod with `pnpm format`, `pnpm lint` and `pnpm typecheck`.
