@@ -446,57 +446,75 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
 
-    // No reading until Claude Code's startup quota check, and none at all while not logged in: say so, so the line doesn't look missing.
-    const r = (await read($, reading)) ?? (await engineReading($));
     const { Box, Text } = $.ui.resolve(e);
 
-    if (r === null) {
+    const usageLine = async () => {
+      // No reading until Claude Code's startup quota check, and none at all while not logged in: say so, so the line doesn't look missing.
+      const r = (await read($, reading)) ?? (await engineReading($));
+
+      if (r === null) {
+        return (
+          <Box
+            key="line"
+            flexDirection="row"
+            justifyContent="flex-end"
+            width="100%"
+          >
+            <Text dimColor>usage: no data yet</Text>
+          </Box>
+        );
+      }
+
+      await read($, minute);
+      const items = lineItems(
+        r,
+        e.props.bodyColumns,
+        await $.clock.now(),
+        await coldNow($, coldSettings),
+      );
+
+      // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
+      // and a wrapped piece would make the row jump to two lines. Cut it short instead.
       return (
-        <Box flexDirection="row" justifyContent="flex-end" width="100%">
-          <Text dimColor>usage: no data yet</Text>
+        <Box
+          key="line"
+          flexDirection="row"
+          justifyContent="flex-end"
+          columnGap={1}
+          width="100%"
+        >
+          {items.flatMap((item, i) => [
+            ...(i > 0
+              ? [
+                  <Text dimColor wrap="truncate-end">
+                    ·
+                  </Text>,
+                ]
+              : []),
+            <Box key={`item:${i}`} flexDirection="row">
+              {item.map(({ text, color }) =>
+                color ? (
+                  <Text color={color} wrap="truncate-end">
+                    {text}
+                  </Text>
+                ) : (
+                  <Text dimColor wrap="truncate-end">
+                    {text}
+                  </Text>
+                ),
+              )}
+            </Box>,
+          ])}
         </Box>
       );
-    }
+    };
 
-    await read($, minute);
-    const items = lineItems(
-      r,
-      e.props.bodyColumns,
-      await $.clock.now(),
-      await coldNow($, coldSettings),
-    );
-
-    // Never wrap: while a desktop window is resized, a frame can draw the layout chosen for the previous width,
-    // and a wrapped piece would make the row jump to two lines. Cut it short instead.
+    // Other mods draw in this band too: their rows go below the line rather than being replaced.
+    // No width here: the engine refuses its own drawing under a Box that sets one.
     return (
-      <Box
-        flexDirection="row"
-        justifyContent="flex-end"
-        columnGap={1}
-        width="100%"
-      >
-        {items.flatMap((item, i) => [
-          ...(i > 0
-            ? [
-                <Text dimColor wrap="truncate-end">
-                  ·
-                </Text>,
-              ]
-            : []),
-          <Box key={`item:${i}`} flexDirection="row">
-            {item.map(({ text, color }) =>
-              color ? (
-                <Text color={color} wrap="truncate-end">
-                  {text}
-                </Text>
-              ) : (
-                <Text dimColor wrap="truncate-end">
-                  {text}
-                </Text>
-              ),
-            )}
-          </Box>,
-        ])}
+      <Box flexDirection="column">
+        {await usageLine()}
+        {await next(e)}
       </Box>
     );
   });
