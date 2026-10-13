@@ -1,6 +1,6 @@
 #!/bin/bash
-# Retakes usage-bar's README screenshots: plugins/usage-bar/images/{normal,yellow,red}.png.
-# usage: scripts/usage-bar-shots/shoot.sh [normal|yellow|red ...]   (all three by default)
+# Retakes usage-bar's README screenshots: plugins/usage-bar/images/{normal,yellow,red,cold}.png.
+# usage: scripts/usage-bar-shots/shoot.sh [normal|yellow|red|cold ...]   (all four by default)
 #
 # Runs Claude Code in tmux with a copy of usage-bar whose readings fixture.ts swaps for fixed figures,
 # then draws the captured screen as an SVG and renders it to PNG with headless Chrome.
@@ -24,6 +24,7 @@ ready_text() {
     normal) echo 'context 62%' ;;
     yellow) echo 'session 78%' ;;
     red) echo 'week 96%' ;;
+    cold) echo 'cache cold' ;;
     *) echo "unknown scenario: $1" >&2; exit 1 ;;
   esac
 }
@@ -52,6 +53,11 @@ shoot() {
     '    if (crossed.length > 0) $.ui.toast(toastText(crossed), { timeoutMs: 30_000 })'
   sed -e '/^import /d' -e 's/^export async function/async function/' \
     -e "s/^const SCENARIO = 'normal'/const SCENARIO = '$name'/" "$HERE/fixture.ts" >> "$hooks"
+  # A fresh session has no cold cache to show, so the cold shot's copy reports one from the start.
+  if [ "$name" = cold ]; then
+    patch_line "$COPY/hooks/cache.ts" \
+      "  if (!i.warnCold || i.working || i.cacheLength === 'off' || i.lastRequest === null) return false" '  return true'
+  fi
 
   "${TMUX_[@]}" kill-server 2>/dev/null || true
   # Unset any plugin folders this shell carries, so only the copy loads in place of the installed usage-bar.
@@ -81,6 +87,6 @@ shoot() {
   echo "$name: plugins/usage-bar/images/$name.png"
 }
 
-for name in "${@:-normal yellow red}"; do
+for name in "${@:-normal yellow red cold}"; do
   for n in $name; do shoot "$n"; done
 done

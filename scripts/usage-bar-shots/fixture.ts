@@ -2,13 +2,14 @@ import type { EngineInterface, SessionMeasureInput } from 'claude-code'
 
 // shoot.sh appends this, minus its imports, to a copy of usage-bar's register.tsx and routes each
 // reading through `fixture`, so it carries a scenario's fixed figures; it also sets SCENARIO.
-type Scenario = 'normal' | 'yellow' | 'red'
+type Scenario = 'normal' | 'yellow' | 'red' | 'cold'
 const SCENARIO = 'normal' as Scenario
 
 const PERCENTS: Record<Scenario, { session: number; week: number }> = {
   normal: { session: 41, week: 18 },
   yellow: { session: 78, week: 18 },
   red: { session: 41, week: 96 },
+  cold: { session: 41, week: 18 },
 }
 
 export async function fixture($: EngineInterface, e: SessionMeasureInput): Promise<SessionMeasureInput> {

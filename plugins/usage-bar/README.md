@@ -4,18 +4,22 @@ Your plan's usage limits, context and cost on one quiet line above the prompt, w
 
 ![The bar at the right edge above Claude Code's prompt: context 62% · $1.84 · session 41% (↻ 2h10m) · week 18% (↻ 3d2h)](images/normal.png)
 
-The line sits at the right edge, away from where you read and type. First, this conversation:
+The line sits at the right edge, away from where you read and type. From left to right:
 
-- `context`: how full the context window is.
-- `cache cold`, in red: the conversation's cache has expired, so your next message re-reads all of it at full price.
-  - It works right after `/resume` too, before you send anything.
-  - It shows only for conversations of 100,000 tokens or more. Change that size, or turn it off, in `/config`.
-  - It doesn't notice a cache broken by switching models, but `/model` warns you about that itself.
-- `$`: what this session has cost.
+| On the line | What it shows |
+|---|---|
+| `context` | How full this conversation's context window is. |
+| `cache cold` | In red: the conversation's cache has expired, so your next message re-reads all of it at full price. |
+| `$` | What this session has cost. |
+| `session`, `week` | How much of your 5-hour and weekly limits you've used. After `↻`, how long until each resets: `2h10m`, `3d2h`, or `now`. |
 
-Then your account's limits:
+More on `cache cold`:
 
-- `session` and `week`: how much of your 5-hour and weekly limits you've used, and after `↻`, how long until each resets: `2h10m`, `3d2h`, or `now` once it has reset.
+- It works right after `/resume` too, before you send anything.
+- It shows only for conversations of 100,000 tokens or more. Change that size, or turn it off, in `/config`.
+- It doesn't notice a cache broken by switching models, but `/model` warns you about that itself.
+
+![The line with "cache cold" in red after context 62%](images/cold.png)
 
 ## Alerts
 
