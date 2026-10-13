@@ -1,27 +1,40 @@
-export type LimitReading = { kind: string; percentUsed: number; resetsAt?: string }
+export type LimitReading = {
+  kind: string;
+  percentUsed: number;
+  resetsAt?: string;
+};
 
 export type Reading = {
-  contextPercent?: number
-  usd?: number
-  rateLimits: LimitReading[]
-}
+  contextPercent?: number;
+  usd?: number;
+  rateLimits: LimitReading[];
+};
 
 // The main conversation's latest model request: when its response arrived, and the context it carried
 // (input + cache read + cache write + output tokens).
-export type LastRequest = { at: number; tokens: number }
+export type LastRequest = { at: number; tokens: number };
 
 // Claude Code's verdict on the cache when a session was resumed or forked, kept until its first request.
-export type Resumed = { cacheLikelyExpired: boolean }
+export type Resumed = { cacheLikelyExpired: boolean };
 
 // What the main conversation's latest reply showed: the model that answered (`claude-haiku-4-5-20251001`) and
 // whether the request read or wrote the prompt cache.
-export type CacheSeen = { model: string; cached: boolean }
+export type CacheSeen = { model: string; cached: boolean };
 
 // The length the main conversation's latest reply with a cache write wrote it with, from the conversation file (A18).
-export type CacheWritten = '5m' | '1h'
+export type CacheWritten = '5m' | '1h';
 
 declare module 'claude-code' {
   interface PluginState {
-    'usage-bar': { reading: Reading | null; minute: number; lastRequest: LastRequest | null; cacheSeen: CacheSeen | null; working: boolean; resumed: Resumed | null; transcript: string | null; written: CacheWritten | null }
+    'usage-bar': {
+      reading: Reading | null;
+      minute: number;
+      lastRequest: LastRequest | null;
+      cacheSeen: CacheSeen | null;
+      working: boolean;
+      resumed: Resumed | null;
+      transcript: string | null;
+      written: CacheWritten | null;
+    };
   }
 }
