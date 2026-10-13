@@ -42,9 +42,10 @@ const week = (percentUsed: number, resetsAt = PERIOD): SessionRateLimit => ({
 });
 
 // Stands for the engine beneath the plugin: records toasts, answers session.measure, and runs a clock from NOW.
+// `band` is the text drawn beneath the plugin in the row above the prompt (a survey, another mod); without it, core's own drawing.
 function engineBeneath(
   on: On,
-  env: Record<string, string> = {},
+  { env = {}, band }: { env?: Record<string, string>; band?: string } = {},
 ): { toasts: string[]; clock: MockClock } {
   const clock = mock.clock(on, { now: NOW });
   const toasts: string[] = [];
@@ -59,6 +60,13 @@ function engineBeneath(
   mock.env(on, env);
   on('settings.read', () => ({ value: {} }));
   on('session.model', () => ({ value: MODEL }));
+  // h is typed loosely (any node, null or undefined); given a component it makes an element.
+  // With no band, core answers as it does: its own drawing, an `engine` node, which only some Boxes may hold.
+  on('ui.render', ($, e) =>
+    band === undefined
+      ? { type: 'engine', ref: 0 }
+      : (h($.ui.resolve(e).Text, null, band) as RenderElement),
+  );
 
   return { toasts, clock };
 }
@@ -93,13 +101,14 @@ async function mountLine(
   });
   // Items are drawn apart with a dot between; ` · ` stands for that.
   const boxes = await ui.findAll({ type: 'Box' });
+  const lineBox = boxes.find((box) => box.key === 'line');
   const items = boxes
     .filter((box) => box.key?.startsWith('item:'))
     .map((box) => box.text);
   // The whole line sits at the right edge, and the gap either side of each dot is the layout's, not typed spaces.
-  expect(boxes[0]?.props.justifyContent).toBe('flex-end');
-  if (items.length > 0) expect(boxes[0]?.props.columnGap).toBe(1);
-  const line = items.length > 0 ? items.join(' · ') : boxes[0]?.text;
+  expect(lineBox?.props.justifyContent).toBe('flex-end');
+  if (items.length > 0) expect(lineBox?.props.columnGap).toBe(1);
+  const line = items.length > 0 ? items.join(' · ') : lineBox?.text;
   const texts = await ui.findAll({ type: 'Text' });
   await ui.unmount();
 
@@ -131,6 +140,7 @@ describe('line', () => {
   // Not logged in, or in the first seconds after startup: no reading has arrived yet.
   test('showsNoDataPlaceholder_beforeTheFirstReading', async ($, on) => {
     mock.store(on);
+    engineBeneath(on);
 
     for (const surface of SURFACES) {
       expect(await lineText($, surface)).toBe('usage: no data yet');
@@ -140,6 +150,7 @@ describe('line', () => {
   // The CLI always keeps a cost ledger, so before the startup quota check the engine holds only `$0.00`.
   test('showsNoDataPlaceholder_whenTheEngineHoldsOnlyTheZeroCostLedger', async ($, on) => {
     mock.store(on);
+    engineBeneath(on);
     engineUsage(on, { usd: 0 });
 
     for (const surface of SURFACES) {
@@ -150,12 +161,7 @@ describe('line', () => {
   // A survey takes the row above the prompt: the line leaves it to what draws beneath.
   test('leavesTheRowToTheSurvey_whileOneShows', async ($, on) => {
     mock.store(on);
-    engineBeneath(on);
-    // h is typed loosely (any node, null or undefined); given a component it makes an element.
-    on(
-      'ui.render',
-      ($, e) => h($.ui.resolve(e).Text, null, 'survey') as RenderElement,
-    );
+    engineBeneath(on, { band: 'survey' });
     await measure($, [week(40)]);
 
     for (const surface of SURFACES) {
@@ -170,6 +176,42 @@ describe('line', () => {
       expect(texts).toEqual(['survey']);
     }
   });
+
+  // The row's text on a surface, its Texts joined by a space.
+  async function rowText($: Engine, surface: (typeof SURFACES)[number]) {
+    const ui = await $.ui.mount({
+      plugin: 'usage-bar',
+      surface,
+      ...abovePrompt(),
+    });
+    const text = (await ui.findAll({ type: 'Text' }))
+      .map((t) => t.text)
+      .join(' ');
+    await ui.unmount();
+
+    return text;
+  }
+
+  // Another mod draws in the row above the prompt too: the line shows above it, never in its place.
+  // One test per surface, so a failure on one never hides the other.
+  for (const surface of SURFACES) {
+    test(`keepsAnotherModsRowBelowTheLine_beforeTheFirstReading_on_${surface}`, async ($, on) => {
+      mock.store(on);
+      engineBeneath(on, { band: 'other mod' });
+
+      const text = await rowText($, surface);
+      expect(text).toMatch(/usage: no data yet.*other mod/);
+    });
+
+    test(`keepsAnotherModsRowBelowTheLine_withAReading_on_${surface}`, async ($, on) => {
+      mock.store(on);
+      engineBeneath(on, { band: 'other mod' });
+      await measure($, [week(40)]);
+
+      const text = await rowText($, surface);
+      expect(text).toMatch(/week.*other mod/);
+    });
+  }
 
   // /clear starts a session with no reading, while the engine still holds the last response's limits.
   test('showsTheEnginesLastLimits_afterClearBeforeAnyTurn', async ($, on) => {
@@ -1329,7 +1371,9 @@ describe('cold line', () => {
 
   test('showsNoColdItem_whenCachingIsDisabled', async ($, on) => {
     mock.store(on);
-    const { clock } = engineBeneath(on, { DISABLE_PROMPT_CACHING: '1' });
+    const { clock } = engineBeneath(on, {
+      env: { DISABLE_PROMPT_CACHING: '1' },
+    });
     // With caching off a reply reads and writes no cache, its whole context uncached (A2).
     modelBeneath(on, [usage(150_000, 0, 0, 0)]);
     await replyThenIdle($, clock, 61);
