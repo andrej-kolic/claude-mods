@@ -43,7 +43,8 @@ Format, lint and type-check every mod with `pnpm format`, `pnpm lint` and `pnpm 
 Anthropic's directory publishes each new commit on `main` as a new version of the mod, and a mod whose `version` didn't change doesn't reach users who already have it. So `main` only receives merges from release branches:
 
 1. Each release has a `release/<version>` branch and a draft PR into `main`. The branch's first commit raises `version` in the mod's `.claude-plugin/plugin.json`. Feature PRs don't touch it.
-2. Feature PRs merge into the release branch. GitHub closes an issue only when its PR merges into `main`, so after each merge, add `Closes #<issue>` to the release PR's body.
-3. While Anthropic reviews a version, nothing is pushed to `main`: a new commit there becomes the version under review.
+2. Each feature PR adds its line to the release's section of the mod's `CHANGELOG.md`, in the same commit as the change. A change that works around a missing Claude Code API also describes it under that release's **Workarounds** and adds its name to **Active workarounds** at the end. A change that removes one says so under **Workarounds** and takes it off the active list.
+3. Feature PRs merge into the release branch. GitHub closes an issue only when its PR merges into `main`, so after each merge, add `Closes #<issue>` to the release PR's body.
+4. While Anthropic reviews a version, nothing is pushed to `main`: a new commit there becomes the version under review.
 
 By contributing, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
