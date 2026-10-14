@@ -35,7 +35,15 @@ Format, lint and type-check every mod with `pnpm format`, `pnpm lint` and `pnpm 
 ## Commits and pull requests
 
 1. Commit messages follow `type(scope): summary`, one logical change per commit, with its tests and docs in the same commit.
-2. Open the PR against `main` and fill in the template. Link the issue it closes.
+2. Open the PR against the current `release/<version>` branch, not `main`, and fill in the template. Link the issue it closes.
 3. Say how you verified the change: which checks pass, and where you saw it working.
+
+## Releases
+
+Anthropic's directory publishes each new commit on `main` as a new version of the mod, and a mod whose `version` didn't change doesn't reach users who already have it. So `main` only receives merges from release branches:
+
+1. Each release has a `release/<version>` branch and a draft PR into `main`. The branch's first commit raises `version` in the mod's `.claude-plugin/plugin.json`. Feature PRs don't touch it.
+2. Feature PRs merge into the release branch. GitHub closes an issue only when its PR merges into `main`, so after each merge, add `Closes #<issue>` to the release PR's body.
+3. While Anthropic reviews a version, nothing is pushed to `main`: a new commit there becomes the version under review.
 
 By contributing, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
