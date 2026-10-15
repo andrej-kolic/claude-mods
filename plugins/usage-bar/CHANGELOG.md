@@ -6,6 +6,10 @@ Each version names the Claude Code release it was built and tested on. Its **Wor
 
 Built on Claude Code 2.1.299.
 
+### Changed
+
+- The README's Privacy section lists what the mod reads, stores and starts, and what its hooks change.
+
 ## [0.2.0] - 2026-10-14
 
 Built on Claude Code 2.1.296.
