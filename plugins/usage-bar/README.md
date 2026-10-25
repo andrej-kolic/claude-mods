@@ -66,7 +66,11 @@ In the desktop app, a new session and `/clear` show no line at all until you sen
 
 ## Privacy
 
-usage-bar reads only figures Claude Code already has: context fill, session cost and your plan's limits. It sends nothing anywhere and makes no network requests. It stores one small record per limit on your machine, listing the alerts already shown in the current period, so a restart doesn't repeat them. To learn how long the cache lasts, it reads the end of this conversation's file on your machine after each reply and keeps only `5m` or `1h`.
+- **Reads only what Claude Code already has:** context fill, session cost and your plan's limits.
+- **Sends nothing.** It makes no network requests, and nothing it reads leaves your machine.
+- **Stores one small record per limit** on your machine, noting which usage alerts it has shown, so restarting Claude Code doesn't show the same alert twice.
+- **Starts one program:** `tail -c 262144 <conversation file>` after each reply and on `/resume` or `/branch`, to read the last 256 KiB of this conversation's file and learn whether the cache lasts `5m` or `1h`. It keeps only that value.
+- **Hooks session start and compaction** only to reset its own saved figures when you `/clear`, `/resume` or compact. It changes no settings, instructions, tool calls or other hooks.
 
 ## Install
 
