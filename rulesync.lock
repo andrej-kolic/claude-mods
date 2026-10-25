@@ -3,15 +3,15 @@
   "sources": {
     "andrej-kolic/playbook": {
       "requestedRef": "main",
-      "resolvedRef": "59fb796da6c057cb4b93c22415e4124f7f68e3df",
-      "resolvedAt": "2026-10-09T14:20:39.831Z",
+      "resolvedRef": "220942e39beba5b3fa8c626dd4b1a384c8c9da9d",
+      "resolvedAt": "2026-10-25T17:19:02.593Z",
       "skills": {},
       "rules": {
         "concision": {
-          "integrity": "sha256-c27880df58a1ba6ecab574a0a0b23383bee9d2d8d02932d5c451b97f9e822eb4"
+          "integrity": "sha256-539f63141809233d5faa296dcc0a921cf5a18d7aeb54af5162fba1ab3d9ce1dd"
         },
         "conversation-style": {
-          "integrity": "sha256-4a200ed6620bd75c9891a98b997c80c5ff0adf03dedc0a68f31e5f9351727b9f"
+          "integrity": "sha256-f5060960c8897b1d2334d3b0658106aff534caa123beb540b28fe4c2a10d0f85"
         },
         "documentation": {
           "integrity": "sha256-a86b03dfe9f196f65c56f697c195890be310ba6b80d10fa6db26a468d9c0188a"
@@ -26,7 +26,7 @@
           "integrity": "sha256-70883cecaed88aba5113b19ff79e1a4672fad237296be1e0ec1a0e52669b308e"
         },
         "testing": {
-          "integrity": "sha256-59a3092e30aca31c0a0afad1312cea14a5129c9a07ca98fad12089bc841333bd"
+          "integrity": "sha256-89f082c22c9add0a29228006029e23fcc981e492c0d9d1644d810488e1e5076f"
         }
       },
       "ruleSelection": [

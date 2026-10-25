@@ -1,4 +1,4 @@
-<!-- playbook:testing v2 (2026-09-23) — same-commit rule moved to git -->
+<!-- playbook:testing v3 (2026-10-21) — temp folders outside the project -->
 <!-- source: andrej-kolic/playbook .rulesync/rules/testing.md; edits elsewhere are overwritten -->
 
 # Testing Conventions
@@ -13,3 +13,4 @@ Defer to this project's own established testing conventions where they exist —
 4. **Deterministic and independent** — no hard-coded sleeps, no shared mutable state between tests, no dependency on run order. A test that's sometimes red for no code reason gets fixed or deleted, not retried into green.
 5. **Test the change** — new or changed behavior gets a test.
 6. **Coverage is a signal, not the goal** — a test that exercises a line without asserting real behavior is worse than no test: it looks like safety and provides none.
+7. **Throwaway folders outside the project** — create throwaway folders and git repos with `mktemp -d` or the language's temp-folder call, never inside the project.
